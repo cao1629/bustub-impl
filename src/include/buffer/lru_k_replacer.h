@@ -139,7 +139,18 @@ class LRUKReplacer {
   [[maybe_unused]] size_t curr_size_{0};
   [[maybe_unused]] size_t replacer_size_;
   [[maybe_unused]] size_t k_;
+
   std::mutex latch_;
+
+  // access count >=k, ordered by lru-k
+  std::list<frame_id_t> lru_k_list_;
+
+  // access count < k, ordered by lru
+  std::list<frame_id_t> lru_list_;
+
+  std::unordered_map<frame_id_t, size_t> access_count_map_;
+
+  std::unordered_map<frame_id_t, bool> is_evictable_map;
 };
 
 }  // namespace bustub
