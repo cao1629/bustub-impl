@@ -52,6 +52,8 @@ class BPlusTreeLeafPage : public BPlusTreePage {
 
   auto KeyAt(int index) const -> KeyType;
 
+  auto KeyIndex(const KeyType &key, const KeyComparator &comparator) const -> int;
+
   // This method always succeeds.
   void Insert(const KeyType &key, const ValueType &value, const KeyComparator &keyComparator);
 

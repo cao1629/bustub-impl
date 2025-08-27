@@ -52,29 +52,64 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType { return array_[index].first; }
 
+
+// Find the first index i so that array_[i].first >= key.
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &keyComparator) const -> int {
+  auto it = std::lower_bound(array_.begin(), array_.end(), key,
+    [&keyComparator](const auto &pair, const KeyType &key) { return keyComparator(pair.first, key) < 0; });
+  return std::distance(array_, it);
+}
+
 // Find the first index i so that array_[i].first >= key.
 // (In fact, array_[i].first == key never happens in this B+ tree)
 // Then insert the key-value pair at index i, and move the rest part to the right by one position.
-template <typename KeyType, typename ValueType, typename KeyComparator>
-void BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>::Insert(const KeyType &key, const ValueType &value,
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value,
                                                                   const KeyComparator &keyComparator) {
+  auto index = KeyIndex(key, keyComparator);
 
+  // Insert at the end
+  if (index == GetSize()) {
+    *(array_ + index) = {key, value};
+    IncreaseSize(1);
+  }
+
+  std::move(array_+index, array_+GetSize(), array_+index+1);
+  *(array_ + index) = {key, value};
+  IncreaseSize(1);
 }
 
 // Given a key, find its value. Return true if exists, false otherwise.
 // Store the value in the output parameter "value"/
-template <typename KeyType, typename ValueType, typename KeyComparator>
-auto BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>::Find(const KeyType &key, ValueType *value,
-                                                                const KeyComparator &keyComparator) const -> bool {
-
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Find(const KeyType &key, ValueType *value, const KeyComparator &keyComparator) const -> bool {
+  auto it = std::find_if(array_, array_+GetSize(),
+        [&key, &keyComparator](const auto &pair) {
+          return keyComparator(pair.first, key) == 0;
+        });
+  if (it != array_+GetSize()) {
+    *value = it->second;
+    return true;
+  }
+  return false;
 }
 
 // Given a key, remove its k/v pair from the leaf page.
 // Return true if exists, false otherwise.
-template <typename KeyType, typename ValueType, typename KeyComparator>
-auto BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>::Remove(const KeyType &key,
-                                                                  const KeyComparator &keyComparator) -> bool {
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, const KeyComparator &keyComparator) -> bool {
+  auto index = KeyIndex(key, keyComparator);
+  if (index == GetSize()) {
+    return false;
+  }
 
+  if (keyComparator(array_[index].first, key) != 0) {
+    return false;
+  }
+
+  std::move(array_+index, array_+GetSize(), array_+index-1);
+  return true;
 }
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;
