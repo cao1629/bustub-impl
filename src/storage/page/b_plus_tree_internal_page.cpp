@@ -53,18 +53,15 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType { ret
 
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComparator &comparator) const
-    -> ValueType {
-
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
   // std::lower_bound to find the first element that is not less than "key".
-  auto it = std::lower_bound(array_+1, array_+GetSize(), key,
-    [&key, &comparator](const auto &pair, const KeyType &key) {
-      return comparator(pair.first, key) < 0;
-    });
+  auto it = std::lower_bound(
+      array_ + 1, array_ + GetSize(), key,
+      [&key, &comparator](const auto &pair, const KeyType &key) { return comparator(pair.first, key) < 0; });
 
   // v1 k2 v2 ..... kn v4 < key
-  if (it == array_+GetSize()) {
-    return array_[GetSize()-1].second;
+  if (it == array_ + GetSize()) {
+    return array_[GetSize() - 1].second;
   }
 
   if (comparator(key, it->first) == 0) {
@@ -72,6 +69,31 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComp
   }
 
   return std::prev(it)->second;
+}
+
+// Move the first key/value pair from this page to the end of "recipient".
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHeadToEnd(BPlusTreeInternalPage *recipient,
+                                                                          BufferPoolManager *buffer_pool_manager) {}
+
+// Move the last key/value pair from this page to the front of "recipient".
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveEndToHead(BPlusTreeInternalPage *recipient,
+                                                                          BufferPoolManager *buffer_pool_manager) {
+}
+
+// for split
+//
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient,
+                                                                          BufferPoolManager *buffer_pool_manager) {
+
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
+                                                                         BufferPoolManager *buffer_pool_manager) {
+
 }
 
 // valuetype for internalNode should be page id_t

@@ -77,7 +77,6 @@ class BPlusTree {
   // given any key, we can find a leaf page that may hold the key
   auto FindLeaf(const KeyType &key, Transaction *transaction = nullptr) -> Page*;
 
-
   // Insert a new k/v pair into the parent. Parent might be split as well.
   void InsertIntoParent(BPlusTreePage *new_node);
 

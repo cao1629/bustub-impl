@@ -45,6 +45,17 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   // Now I am in an internal page. Given a key, find the child pointer to go down.
   auto FindChild(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
 
+  void MoveHeadToEnd(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
+
+  // for redistribution
+  void MoveEndToHead(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
+
+  // for split
+  void MoveHalfTo(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
+
+  // for coalescing
+  void MoveAllTo(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
+
  private:
   // Flexible array member for page data.
   MappingType array_[1];

@@ -108,9 +108,24 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, const KeyComparator 
     return false;
   }
 
-  std::move(array_+index, array_+GetSize(), array_+index-1);
+  std::move(array_ + index, array_ + GetSize(), array_ + index - 1);
   return true;
 }
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHeadToEnd(BPlusTreeLeafPage *recipient) {}
+
+// Move the last key/value pair from this page to the front of "recipient".
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveEndToHead(BPlusTreeLeafPage *recipient) {}
+
+// Move
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {}
+
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {}
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;
 template class BPlusTreeLeafPage<GenericKey<8>, RID, GenericComparator<8>>;

@@ -160,8 +160,9 @@ void BPLUSTREE_TYPE::RemoveFromFile(const std::string &file_name, Transaction *t
     Remove(index_key, transaction);
   }
 }
-template <typename KeyType, typename ValueType, typename KeyComparator>
-auto BPlusTree<KeyType, ValueType, KeyComparator>::FindLeaf(const KeyType &key, Transaction *transaction) -> Page * {
+
+INDEX_TEMPLATE_ARGUMENTS
+auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key, Transaction *transaction) -> Page * {
   auto page = buffer_pool_manager_->FetchPage(root_page_id_);
 
   // root node could be either internal node or leaf node
@@ -180,21 +181,20 @@ auto BPlusTree<KeyType, ValueType, KeyComparator>::FindLeaf(const KeyType &key, 
 }
 
 
+INDEX_TEMPLATE_ARGUMENTS
+void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *new_node) {}
 
-template <typename KeyType, typename ValueType, typename KeyComparator>
-void BPlusTree<KeyType, ValueType, KeyComparator>::InsertIntoParent(BPlusTreePage *new_node) {}
-
-template <typename KeyType, typename ValueType, typename KeyComparator>
+INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPlusTree<KeyType, ValueType, KeyComparator>::Split(N *node) -> N * {}
+auto BPLUSTREE_TYPE::Split(N *node) -> N * {}
 
-template <typename KeyType, typename ValueType, typename KeyComparator>
+INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPlusTree<KeyType, ValueType, KeyComparator>::CoalesceOrRedistribute(N *node) -> bool {}
+auto BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node) -> bool {}
 
-template <typename KeyType, typename ValueType, typename KeyComparator>
+INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPlusTree<KeyType, ValueType, KeyComparator>::Coalesce(N *node, N *sibling, bool is_left_sibling) -> bool {}
+auto BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling) -> bool {}
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
 template <typename N>
