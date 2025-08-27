@@ -42,6 +42,9 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   void SetKeyAt(int index, const KeyType &key);
   auto ValueAt(int index) const -> ValueType;
 
+  // Now I am in an internal page. Given a key, find the child pointer to go down.
+  auto FindChild(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
+
  private:
   // Flexible array member for page data.
   MappingType array_[1];

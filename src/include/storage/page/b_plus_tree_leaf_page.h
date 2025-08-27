@@ -45,10 +45,23 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   // After creating a new leaf page from buffer pool, must call initialize
   // method to set default values
   void Init(page_id_t page_id, page_id_t parent_id = INVALID_PAGE_ID, int max_size = LEAF_PAGE_SIZE);
+
   // helper methods
   auto GetNextPageId() const -> page_id_t;
   void SetNextPageId(page_id_t next_page_id);
+
   auto KeyAt(int index) const -> KeyType;
+
+  // This method always succeeds.
+  void Insert(const KeyType &key, const ValueType &value, const KeyComparator &keyComparator);
+
+  // Given a key, find its value. Return true if exists, false otherwise
+  auto Find(const KeyType &key, ValueType *value, const KeyComparator &keyComparator) const -> bool;
+
+  // Given a key, remove its k/v pair from the leaf page. Return true if exists, false otherwise
+  auto Remove(const KeyType &key, const KeyComparator &keyComparator) -> bool;
+
+
 
  private:
   page_id_t next_page_id_;

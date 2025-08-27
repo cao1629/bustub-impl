@@ -74,6 +74,36 @@ class BPlusTree {
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
 
+  // given any key, we can find a leaf page that may hold the key
+  auto FindLeaf(const KeyType &key, Transaction *transaction = nullptr) -> Page*;
+
+
+  // Insert a new k/v pair into the parent. Parent might be split as well.
+  void InsertIntoParent(BPlusTreePage *new_node);
+
+  template <typename N>
+  auto Split(N *node) ->  N*;
+
+
+  // return value indicates whether "node" should be deleted after this operation.
+  // coalesce: move all items from "node" to its sibling, then delete "node"
+  // redistribute: move one item from sibling to "node", no node is deleted
+  template <typename N>
+  auto CoalesceOrRedistribute(N *node) -> bool;
+
+
+  // return value indicates whether parent node should be deleted after this operation.
+  // We coalesce two nodes into one, then one entry in parent node is deleted.
+  // We then probably need to coalesce or redistribute the parent node.
+  // If we coalesce the parent node with its sibling, then the parent node will be deleted.
+  template <typename N>
+  auto Coalesce(N *node, N *sibling, bool is_left_sibling) -> bool;
+
+
+  template <typename N>
+  void Redistribute(N *node, N *sibling, bool is_left_sibling);
+
+
  private:
   void UpdateRootPageId(int insert_record = 0);
 
@@ -87,6 +117,7 @@ class BPlusTree {
   page_id_t root_page_id_;
   BufferPoolManager *buffer_pool_manager_;
   KeyComparator comparator_;
+
   int leaf_max_size_;
   int internal_max_size_;
 };

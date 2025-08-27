@@ -47,7 +47,15 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool {
-  return false;
+
+  auto leaf_page = FindLeaf(key, transaction);
+  auto *leaf_node = reinterpret_cast<LeafPage *>(leaf_page->GetData());
+
+  // Now we're in the right leaf page. Insert the key/value pair into leaf page.
+  // Split might happen after insertion.
+
+  // do the insertion first
+
 }
 
 /*****************************************************************************
@@ -152,6 +160,46 @@ void BPLUSTREE_TYPE::RemoveFromFile(const std::string &file_name, Transaction *t
     Remove(index_key, transaction);
   }
 }
+template <typename KeyType, typename ValueType, typename KeyComparator>
+auto BPlusTree<KeyType, ValueType, KeyComparator>::FindLeaf(const KeyType &key, Transaction *transaction) -> Page * {
+  auto page = buffer_pool_manager_->FetchPage(root_page_id_);
+
+  // root node could be either internal node or leaf node
+  auto *p = reinterpret_cast<BPlusTreePage *>(page->GetData());
+
+  while (!p->IsLeafPage()) {
+    auto *internal_node = reinterpret_cast<InternalPage *>(p);
+    auto child_page_id = internal_node->FindChild(key, comparator_);
+
+    buffer_pool_manager_->UnpinPage(p->GetPageId(), false);
+    page = buffer_pool_manager_->FetchPage(child_page_id);
+    p = reinterpret_cast<BPlusTreePage *>(page->GetData());
+  }
+
+  return page;
+}
+
+
+
+template <typename KeyType, typename ValueType, typename KeyComparator>
+void BPlusTree<KeyType, ValueType, KeyComparator>::InsertIntoParent(BPlusTreePage *new_node) {}
+
+template <typename KeyType, typename ValueType, typename KeyComparator>
+template <typename N>
+auto BPlusTree<KeyType, ValueType, KeyComparator>::Split(N *node) -> N * {}
+
+template <typename KeyType, typename ValueType, typename KeyComparator>
+template <typename N>
+auto BPlusTree<KeyType, ValueType, KeyComparator>::CoalesceOrRedistribute(N *node) -> bool {}
+
+template <typename KeyType, typename ValueType, typename KeyComparator>
+template <typename N>
+auto BPlusTree<KeyType, ValueType, KeyComparator>::Coalesce(N *node, N *sibling, bool is_left_sibling) -> bool {}
+
+template <typename KeyType, typename ValueType, typename KeyComparator>
+template <typename N>
+void BPlusTree<KeyType, ValueType, KeyComparator>::Redistribute(N *node, N *sibling, bool is_left_sibling) {}
+
 
 /**
  * This method is used for debug only, You don't need to modify
