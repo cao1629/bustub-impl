@@ -63,8 +63,6 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   // Given a key, remove its k/v pair from the leaf page. Return true if exists, false otherwise
   auto Remove(const KeyType &key, const KeyComparator &keyComparator) -> bool;
 
-
-
  private:
   page_id_t next_page_id_;
   // Flexible array member for page data.
