@@ -71,19 +71,24 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComp
   return std::prev(it)->second;
 }
 
+
 // Move the first key/value pair from this page to the end of "recipient".
+// "recipient" is on the left, and this page is on the right.
+// For internal pages, the first key is empty, so we need to provide a key to fill in, and then move the first item
+// to the recipient.
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHeadToEnd(BPlusTreeInternalPage *recipient,
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *recipient,
                                                                           BufferPoolManager *buffer_pool_manager) {}
 
 // Move the last key/value pair from this page to the front of "recipient".
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveEndToHead(BPlusTreeInternalPage *recipient,
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToHeadOf(BPlusTreeInternalPage *recipient,
                                                                           BufferPoolManager *buffer_pool_manager) {
+
 }
 
+
 // for split
-//
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient,
                                                                           BufferPoolManager *buffer_pool_manager) {

@@ -113,19 +113,58 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, const KeyComparator 
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHeadToEnd(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient) {
+  auto first_item = array_[0];
+  std::move(array_ + 1, array_ + GetSize(), array_);
+  recipient->CopyToEnd(first_item);
+  IncreaseSize(-1);
+}
 
 // Move the last key/value pair from this page to the front of "recipient".
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveEndToHead(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToHeadOf(BPlusTreeLeafPage *recipient) {
+  auto last_item = array_[GetSize()-1];
+  recipient->CopyToHead(last_item);
+  IncreaseSize(-1);
+}
 
 // Move
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
+  // Keep the minimum number of items in this page
+  int start_index = GetMinSize();
+  recipient->CopyNToEnd(array_+start_index, GetSize() - start_index);
+  SetSize(start_index);
+}
 
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
+  recipient->CopyToEnd(array_, GetSize());
+  SetSize(0);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyToHead(const ItemType &item) {
+  std::move(array_, array_+GetSize(), array_+1);
+
+  // copy
+  array_[0] = item;
+
+  IncreaseSize(1);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyToEnd(const ItemType &item) {
+  array_[GetSize()] = item;
+  IncreaseSize(1);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNToEnd(ItemType *items, int size) {
+  std::move(items, items+size, array_+GetSize());
+  IncreaseSize(size);
+}
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;
 template class BPlusTreeLeafPage<GenericKey<8>, RID, GenericComparator<8>>;

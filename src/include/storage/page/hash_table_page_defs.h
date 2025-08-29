@@ -12,7 +12,7 @@
 
 #pragma once
 
-#define MappingType std::pair<KeyType, ValueType>
+#define ItemType std::pair<KeyType, ValueType>
 
 /**
  * Linear Probe Hashing Definitions
