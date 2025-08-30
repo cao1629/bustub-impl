@@ -78,26 +78,81 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComp
 // to the recipient.
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *recipient,
-                                                                          BufferPoolManager *buffer_pool_manager) {}
+                                                                          BufferPoolManager *buffer_pool_manager,
+                                                                          const KeyType &separator_key) {
+  array_[0].first = separator_key;
+  auto first_item = array_[0];
+  std::move(array_+1, array_+GetSize(), array_);
+  IncreaseSize(-1);
+  recipient->CopyToEnd(first_item, buffer_pool_manager);
+}
 
 // Move the last key/value pair from this page to the front of "recipient".
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToHeadOf(BPlusTreeInternalPage *recipient,
-                                                                          BufferPoolManager *buffer_pool_manager) {
-
+                                                                          BufferPoolManager *buffer_pool_manager,
+                                                                          const KeyType &separator_key) {
+  auto last_item = array_[GetSize()-1];
+  recipient->SetKeyAt(0, separator_key);
+  recipient->CopyToHead(last_item, buffer_pool_manager);
+  IncreaseSize(-1);
 }
 
 
-// for split
+
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient,
                                                                           BufferPoolManager *buffer_pool_manager) {
-
+  int start_index = GetMinSize();
+  recipient->CopyNToEnd(array_+start_index, GetSize() - start_index, buffer_pool_manager);
+  SetSize(GetMinSize());
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
-                                                                         BufferPoolManager *buffer_pool_manager) {
+                                                                         BufferPoolManager *buffer_pool_manager,
+                                                                         KeyType &separator_key) {
+  SetKeyAt(0, separator_key);
+  recipient->CopyNToEnd(array_, GetSize(), buffer_pool_manager);
+  SetSize(0);
+}
+
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToHead(const ItemType &item, BufferPoolManager *buffer_pool_manager) {
+  std::move(array_, array_+GetSize(), array_+1);
+  *array_ = item;
+  IncreaseSize(1);
+
+  auto page = buffer_pool_manager->FetchPage(item.second);
+  auto *node = reinterpret_cast<BPlusTreePage *>(page->GetData());
+  node->SetParentPageId(GetPageId());
+  buffer_pool_manager->UnpinPage(page->GetPageId(), true);
+}
+
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToEnd(const ItemType &item, BufferPoolManager *buffer_pool_manager) {
+  *(array_+GetSize()) = item;
+  IncreaseSize(1);
+
+  auto page = buffer_pool_manager->FetchPage(item.second);
+  auto *node = reinterpret_cast<BPlusTreePage *>(page->GetData());
+  node->SetParentPageId(GetPageId());
+  buffer_pool_manager->UnpinPage(page->GetPageId(), true);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNToEnd(ItemType *items, int size, BufferPoolManager *buffer_pool_manager) {
+  std::move(items, items+size, array_+GetSize());
+  IncreaseSize(size);
+
+  for (int i = 0; i < size; i++) {
+    auto page = buffer_pool_manager->FetchPage(items[i].second);
+    auto *node = reinterpret_cast<BPlusTreePage *>(page->GetData());
+    node->SetParentPageId(GetPageId());
+    buffer_pool_manager->UnpinPage(page->GetPageId(), true);
+  }
 
 }
 

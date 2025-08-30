@@ -18,7 +18,7 @@ namespace bustub {
 
 #define B_PLUS_TREE_INTERNAL_PAGE_TYPE BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>
 #define INTERNAL_PAGE_HEADER_SIZE 24
-#define INTERNAL_PAGE_SIZE ((BUSTUB_PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (sizeof(MappingType)))
+#define INTERNAL_PAGE_SIZE ((BUSTUB_PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (sizeof(ItemType)))
 /**
  * Store n indexed keys and n+1 child pointers (page_id) within internal page.
  * Pointer PAGE_ID(i) points to a subtree in which all keys K satisfy:
@@ -45,19 +45,30 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   // Now I am in an internal page. Given a key, find the child pointer to go down.
   auto FindChild(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
 
-  void MoveFirstToEndOf(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
+  // We want to move the first item to the recipient, but the first item has no key. We need to provide
+  // a key.
+  void MoveFirstToEndOf(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager,
+    const KeyType &separator_key);
 
-  // for redistribution
-  void MoveLastToHeadOf(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
+  // After we move the last item to the recipient, the first item of the recipient becomes
+  // the second item, but it has no key. We need to provide a key.
+  void MoveLastToHeadOf(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager,
+    const KeyType &separator_key);
 
-  // for split
+  // the recipient is an empty page.
   void MoveHalfTo(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
 
   // for coalescing
-  void MoveAllTo(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
+  void MoveAllTo(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager, KeyType &separator_key);
 
  private:
   // Flexible array member for page data.
   ItemType array_[1];
+
+  void CopyToEnd(const ItemType &item, BufferPoolManager *buffer_pool_manager);
+
+  void CopyToHead(const ItemType &item, BufferPoolManager *buffer_pool_manager);
+
+  void CopyNToEnd(ItemType *items, int size, BufferPoolManager *buffer_pool_manager);
 };
 }  // namespace bustub
