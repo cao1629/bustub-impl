@@ -35,17 +35,22 @@ namespace bustub {
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTreeInternalPage : public BPlusTreePage {
  public:
+
   // must call initialize method after "create" a new node
   void Init(page_id_t page_id, page_id_t parent_id = INVALID_PAGE_ID, int max_size = INTERNAL_PAGE_SIZE);
 
   auto KeyAt(int index) const -> KeyType;
+
   void SetKeyAt(int index, const KeyType &key);
+
   auto ValueAt(int index) const -> ValueType;
 
+  // Now I am in an internal page. Given a key, find the page on the next level to go down.
+  auto FindNextLevelPage(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
 
+  auto ValueIndex(const ValueType &value) const -> int;
 
-  // Now I am in an internal page. Given a key, find the child pointer to go down.
-  auto FindChild(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
+  void InsertAfterValue(const ValueType &prev, const KeyType &key, const ValueType &value);
 
   // We want to move the first item to the recipient, but the first item has no key. We need to provide
   // a key.

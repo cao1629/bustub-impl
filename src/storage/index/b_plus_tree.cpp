@@ -21,7 +21,9 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, BufferPoolManager *buffer_pool_manag
  * Helper function to decide whether current b+tree is empty
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
+  return root_page_id_ == INVALID_PAGE_ID;
+}
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
@@ -45,15 +47,33 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  * @return: since we only support unique key, if user try to insert duplicate
  * keys return false, otherwise return true.
  */
+//
+// Unpin all pages that have been fetched.
+// If "key" already exists in some leaf page, do nothing and return false.
+// Otherwise, do the insertion and return true.
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool {
 
+  // check if tree is empty
+  if (IsEmpty()) {
+    auto root_page = buffer_pool_manager_->NewPage(&root_page_id_);
+
+    // If the tree only has a root node, then the root node is a leaf node.
+    auto root_node = reinterpret_cast<LeafPage*>(root_page->GetData());
+
+    root_node->Init(root_page_id_, INVALID_PAGE_ID, leaf_max_size_);
+    root_node->Insert(key, value, comparator_);
+    return true;
+  }
+
+  // Find the leaf node to insert the key/value pair.
   auto leaf_page = FindLeaf(key, transaction);
   auto *leaf_node = reinterpret_cast<LeafPage*>(leaf_page->GetData());
 
   auto old_size = leaf_page->GetSize();
   auto new_size = leaf_node->Insert(key, value);
 
+  // "key" already exists in this leaf page
   if (old_size == new_size) {
     buffer_pool_manager_->UnpinPage(leaf_node->GetPageId(), false);
     return false;
@@ -70,7 +90,9 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   new_right_sibling->SetNextPageId(leaf_node->GetNextPageId());
   leaf_node->SetNextPageId(new_right_sibling->GetPageId());
 
-  InsertIntoParent()
+  // Insert one item into parent.
+  InsertIntoParent(leaf_node, new_right_sibling);
+  return true;
 }
 
 /*****************************************************************************
@@ -197,9 +219,46 @@ auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key, Transaction *transaction) -> P
 }
 
 
+// After splitting the parent page, we need to insert a new k/v pair into its parent.
+// k: the first key in the new node
+// v: the page id of the new node
+//
+// [1] If the old node is the root, we need to create a new root page.
+// [2] If the parent node is not full (< max size), we do not need to split it.
+// [3] If the parent node is full (= max size), we need to split it.
+// We might need to insert a new item into parent recursively.
 INDEX_TEMPLATE_ARGUMENTS
-void BPLUSTREE_TYPE::InsertIntoParent(const KeyType &key, BPlusTreePage *new_node) {
+void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, BPlusTreePage *new_node, const KeyType &key) {
+  // The old node is the root. Now we need a new root page with two items.
+  if (new_node->IsRootPage()) {
+    auto new_root_page = buffer_pool_manager_->NewPage(&root_page_id_);
+    auto new_root_node = reinterpret_cast<LeafPage *>(new_root_page->GetData());
+    new_root_node->Init(root_page_id_, INVALID_PAGE_ID, internal_max_size_);
 
+    old_node->SetParentPageId(new_root_page->GetPageId());
+    new_node->SetParentPageId(new_root_page->GetPageId());
+
+    new_root_node->Insert(key, new_node->GetPageId(), comparator_);
+    return;
+  }
+
+
+  // old_node and new_node are not root nodes.
+  auto parent_page = buffer_pool_manager_->FetchPage(old_node->GetPageId());
+  auto *parent_node = reinterpret_cast<InternalPage *>(parent_page->GetData());
+
+  // Like in leaf pages, we do insertion first. When the size hits max_size, we split it.
+  parent_node->InsertAfterValue(old_node->GetPageId(), key, new_node->GetPageId());
+
+  // no need to split
+  if (parent_node->GetSize() < internal_max_size_) {
+    buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
+    return;
+  }
+
+  auto new_parent_sibling = Split(parent_node);
+  const auto &new_key = new_parent_sibling->GetKey();
+  InsertIntoParent(parent_node, new_parent_sibling, new_key);
 }
 
 

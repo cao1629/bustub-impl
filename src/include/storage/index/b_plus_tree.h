@@ -45,8 +45,7 @@ class BPlusTree {
   // Returns true if this B+ tree has no keys and values.
   auto IsEmpty() const -> bool;
 
-  // Insert a key-value pair into this B+ tree.
-  // Unpin all pages that have been fetched.
+
   auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
 
   // Remove a key and its value from this B+ tree.
@@ -78,16 +77,10 @@ class BPlusTree {
   // given any key, we can find a leaf page that may hold the key
   auto FindLeaf(const KeyType &key, Transaction *transaction = nullptr) -> Page*;
 
-  // Insert a new k/v pair into the parent. Parent might be split as well.
-  //
-  // [1] We just split the root page. We need a new root page.
-  // [2] No need to split the parent page.
-  // [2] Need to split the parent page.
-  void InsertIntoParent(const KeyType &key, BPlusTreePage *new_node);
+  void InsertIntoParent(BPlusTreePage *old_node, BPlusTreePage *new_node, const KeyType &key);
 
   template <typename N>
   auto Split(N *node) ->  N*;
-
 
   // return value indicates whether "node" should be deleted after this operation.
   // coalesce: move all items from "node" to its sibling, then delete "node"
@@ -102,7 +95,6 @@ class BPlusTree {
   // If we coalesce the parent node with its sibling, then the parent node will be deleted.
   template <typename N>
   auto Coalesce(N *node, N *sibling, bool is_left_sibling) -> bool;
-
 
   template <typename N>
   void Redistribute(N *node, N *sibling, bool is_left_sibling);

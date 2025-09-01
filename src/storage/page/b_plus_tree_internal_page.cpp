@@ -51,13 +51,34 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType { return array_[index].second; }
 
+// I split one page, and now I have an old page and a new page.
+// I need to insert an item for the new page into this page.
+// I first need to find the item for the old page, and then insert the new item after it.
+// So I'm sure that "value" is in this page.
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
+  auto it = std::find_if(array_, array_+GetSize(), [&value](const auto &item) {
+    return item.second == value;
+  });
+  return std::distance(array_, it);
+}
+
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertAfterValue(const ValueType &prev, const KeyType &key, const ValueType &value) {
+  auto index = ValueIndex(value);
+  std::move(array_+index+1, array_+GetSize(), array_+index+2);
+  *(array_+index+1) = {key, value};
+  IncreaseSize(1);
+}
+
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindNextLevelPage(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
   // std::lower_bound to find the first element that is not less than "key".
   auto it = std::lower_bound(
       array_ + 1, array_ + GetSize(), key,
-      [&key, &comparator](const auto &pair, const KeyType &key) { return comparator(pair.first, key) < 0; });
+      [&key, &comparator](const auto &pair, const KeyType &k) { return comparator(pair.first, k) < 0; });
 
   // v1 k2 v2 ..... kn v4 < key
   if (it == array_ + GetSize()) {
@@ -70,7 +91,6 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComp
 
   return std::prev(it)->second;
 }
-
 
 // Move the first key/value pair from this page to the end of "recipient".
 // "recipient" is on the left, and this page is on the right.
@@ -98,8 +118,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToHeadOf(BPlusTreeInternalPage *rec
   IncreaseSize(-1);
 }
 
-
-
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient,
                                                                           BufferPoolManager *buffer_pool_manager) {
@@ -117,7 +135,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
   SetSize(0);
 }
 
-
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToHead(const ItemType &item, BufferPoolManager *buffer_pool_manager) {
   std::move(array_, array_+GetSize(), array_+1);
@@ -129,7 +146,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToHead(const ItemType &item, BufferPool
   node->SetParentPageId(GetPageId());
   buffer_pool_manager->UnpinPage(page->GetPageId(), true);
 }
-
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToEnd(const ItemType &item, BufferPoolManager *buffer_pool_manager) {

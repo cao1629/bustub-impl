@@ -66,6 +66,7 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparato
 // Find the first index i so that array_[i].first >= key.
 // (In fact, array_[i].first == key never happens in this B+ tree)
 // Then insert the key-value pair at index i, and move the rest part to the right by one position.
+// Return the new size after insertion. If "key" already exists, do nothing and return the current size.
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value,
                                                                   const KeyComparator &keyComparator) {
