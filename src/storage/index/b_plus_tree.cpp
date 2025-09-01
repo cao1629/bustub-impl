@@ -49,13 +49,28 @@ INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool {
 
   auto leaf_page = FindLeaf(key, transaction);
-  auto *leaf_node = reinterpret_cast<LeafPage *>(leaf_page->GetData());
+  auto *leaf_node = reinterpret_cast<LeafPage*>(leaf_page->GetData());
 
-  // Now we're in the right leaf page. Insert the key/value pair into leaf page.
-  // Split might happen after insertion.
+  auto old_size = leaf_page->GetSize();
+  auto new_size = leaf_node->Insert(key, value);
 
-  // do the insertion first
+  if (old_size == new_size) {
+    buffer_pool_manager_->UnpinPage(leaf_node->GetPageId(), false);
+    return false;
+  }
 
+  // no need to split
+  if (new_size < leaf_max_size_) {
+    buffer_pool_manager_->UnpinPage(leaf_node->GetPageId(), true);
+    return true;
+  }
+
+  // need to split
+  auto new_right_sibling = Split(leaf_node);
+  new_right_sibling->SetNextPageId(leaf_node->GetNextPageId());
+  leaf_node->SetNextPageId(new_right_sibling->GetPageId());
+
+  InsertIntoParent()
 }
 
 /*****************************************************************************
@@ -63,7 +78,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
  *****************************************************************************/
 /*
  * Delete key & value pair associated with input key
- * If current tree is empty, return immdiately.
+ * If current tree is empty, return immediately.
  * If not, User needs to first find the right leaf page as deletion target, then
  * delete entry from leaf page. Remember to deal with redistribute or merge if
  * necessary.
@@ -145,6 +160,7 @@ void BPLUSTREE_TYPE::InsertFromFile(const std::string &file_name, Transaction *t
     Insert(index_key, rid, transaction);
   }
 }
+
 /*
  * This method is used for test only
  * Read data from file and remove one by one
@@ -182,19 +198,49 @@ auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key, Transaction *transaction) -> P
 
 
 INDEX_TEMPLATE_ARGUMENTS
-void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *new_node) {}
+void BPLUSTREE_TYPE::InsertIntoParent(const KeyType &key, BPlusTreePage *new_node) {
 
+}
+
+
+// (1) new page
+// (2) move half
+// (3) return the new page
+// This page will be on the left, and the new page will be on the right.
+// We do not update the parent page here.
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPLUSTREE_TYPE::Split(N *node) -> N * {}
+auto BPLUSTREE_TYPE::Split(N *node) -> N * {
+  page_id_t new_page_id;
+  auto new_page = buffer_pool_manager_->NewPage(&new_page_id);
+
+  N *new_node = reinterpret_cast<N*>(new_page->GetData());
+  new_node->SetPageType(node->SetPageType());
+
+  if (node->IsLeafPage()) {
+    auto *leaf_page = reinterpret_cast<LeafPage*>(node);
+    auto *new_leaf_page = reinterpret_cast<LeafPage*>(new_node);
+    new_leaf_page->Init(new_page_id, node->GetParentPageId(), leaf_max_size_);
+    leaf_page->MoveHalfTo(new_leaf_page);
+  } else {
+    auto *internal_page = reinterpret_cast<InternalPage*>(node);
+    auto *new_internal_page = reinterpret_cast<InternalPage*>(new_node);
+    new_internal_page->Init(new_page_id, node->GetParentPageid(), internal_max_size_);
+    internal_page->MoveHalfTo(new_internal_page, buffer_pool_manager_);
+  }
+  return new_node;
+}
+
 
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
 auto BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node) -> bool {}
 
+
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
 auto BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling) -> bool {}
+
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
 template <typename N>

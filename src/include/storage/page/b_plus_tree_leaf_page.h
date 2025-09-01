@@ -51,10 +51,11 @@ class BPlusTreeLeafPage : public BPlusTreePage {
 
   auto KeyAt(int index) const -> KeyType;
 
-  auto KeyIndex(const KeyType &key, const KeyComparator &comparator) const -> int;
+
+  auto KeyIndex(const KeyType &key, const KeyComparator &keyComparator) const -> int;
 
   // This method always succeeds.
-  void Insert(const KeyType &key, const ValueType &value, const KeyComparator &keyComparator);
+  int Insert(const KeyType &key, const ValueType &value, const KeyComparator &keyComparator);
 
   // Given a key, find its value. Return true if exists, false otherwise
   auto Find(const KeyType &key, ValueType *value, const KeyComparator &keyComparator) const -> bool;

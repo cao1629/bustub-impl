@@ -48,16 +48,18 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {
   next_page_id_ = next_page_id;
 }
 
-
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType { return array_[index].first; }
 
 
+// Used for insertion and removal. We first need to find the position where we do insertion
+// or deletion.
 // Find the first index i so that array_[i].first >= key.
+// If the return value is the size of this page, means all keys in this page are less than "key".
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &keyComparator) const -> int {
   auto it = std::lower_bound(array_.begin(), array_.end(), key,
-    [&keyComparator](const auto &pair, const KeyType &key) { return keyComparator(pair.first, key) < 0; });
+    [&keyComparator](const auto &pair, const KeyType &k) { return keyComparator(pair.first, k) < 0; });
   return std::distance(array_, it);
 }
 
@@ -65,23 +67,31 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparato
 // (In fact, array_[i].first == key never happens in this B+ tree)
 // Then insert the key-value pair at index i, and move the rest part to the right by one position.
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value,
+int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value,
                                                                   const KeyComparator &keyComparator) {
   auto index = KeyIndex(key, keyComparator);
+
+  // check if the key is already in the leaf page
+  // if so, do nothing and return the current size.
+  if (keyComparator(KeyAt(index), key) == 0) {
+    return GetSize();
+  }
 
   // Insert at the end
   if (index == GetSize()) {
     *(array_ + index) = {key, value};
     IncreaseSize(1);
+    return GetSize();
   }
 
   std::move(array_+index, array_+GetSize(), array_+index+1);
   *(array_ + index) = {key, value};
   IncreaseSize(1);
+  return GetSize();
 }
 
 // Given a key, find its value. Return true if exists, false otherwise.
-// Store the value in the output parameter "value"/
+// Store the value in the output parameter "value".
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::Find(const KeyType &key, ValueType *value, const KeyComparator &keyComparator) const -> bool {
   auto it = std::find_if(array_, array_+GetSize(),

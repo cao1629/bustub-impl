@@ -79,7 +79,11 @@ class BPlusTree {
   auto FindLeaf(const KeyType &key, Transaction *transaction = nullptr) -> Page*;
 
   // Insert a new k/v pair into the parent. Parent might be split as well.
-  void InsertIntoParent(BPlusTreePage *new_node);
+  //
+  // [1] We just split the root page. We need a new root page.
+  // [2] No need to split the parent page.
+  // [2] Need to split the parent page.
+  void InsertIntoParent(const KeyType &key, BPlusTreePage *new_node);
 
   template <typename N>
   auto Split(N *node) ->  N*;
