@@ -45,10 +45,8 @@ class BPlusTree {
   // Returns true if this B+ tree has no keys and values.
   auto IsEmpty() const -> bool;
 
-
   auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
 
-  // Remove a key and its value from this B+ tree.
   void Remove(const KeyType &key, Transaction *transaction = nullptr);
 
   // return the value associated with a given key
@@ -88,17 +86,15 @@ class BPlusTree {
   template <typename N>
   auto CoalesceOrRedistribute(N *node) -> bool;
 
-
   // return value indicates whether parent node should be deleted after this operation.
   // We coalesce two nodes into one, then one entry in parent node is deleted.
   // We then probably need to coalesce or redistribute the parent node.
   // If we coalesce the parent node with its sibling, then the parent node will be deleted.
   template <typename N>
-  auto Coalesce(N *node, N *sibling, bool is_left_sibling) -> bool;
+  auto Coalesce(N *node, N *sibling, bool is_left_sibling, const KeyType &middle_key) -> bool;
 
   template <typename N>
-  void Redistribute(N *node, N *sibling, bool is_left_sibling);
-
+  void Redistribute(N *node, N *sibling, bool is_left_sibling, BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index);
 
  private:
   void UpdateRootPageId(int insert_record = 0);

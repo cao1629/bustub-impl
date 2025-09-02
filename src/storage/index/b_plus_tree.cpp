@@ -37,6 +37,7 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   return false;
 }
 
+
 /*****************************************************************************
  * INSERTION
  *****************************************************************************/
@@ -105,8 +106,31 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
  * delete entry from leaf page. Remember to deal with redistribute or merge if
  * necessary.
  */
+// What if we try to remove a key that does not exist? We do nothing and just return.
 INDEX_TEMPLATE_ARGUMENTS
-void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {}
+void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
+  if (IsEmpty()) {
+    return;
+  }
+
+  auto leaf_page = FindLeaf(key, transaction);
+  auto *leaf_node = reinterpret_cast<LeafPage*>(leaf_page);
+
+  // "key" exists in this leaf page. So we do nothing and return.
+  if (!leaf_node->Remove(key, comparator_)) {
+    buffer_pool_manager_->UnpinPage(leaf_node->GetPageId(), false);
+    return;
+  }
+
+  // no need to redistribute or coalesce
+  if (leaf_node->GetSize() >= leaf_node->GetMinSize()) {
+    buffer_pool_manager_->UnpinPage(leaf_node->GetPageId(), true);
+    return;
+  }
+
+  // need to redistribute or coalesce
+  CoalesceOrRedistribute(leaf_node);
+}
 
 /*****************************************************************************
  * INDEX ITERATOR
@@ -242,7 +266,6 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, BPlusTreePage *ne
     return;
   }
 
-
   // old_node and new_node are not root nodes.
   auto parent_page = buffer_pool_manager_->FetchPage(old_node->GetPageId());
   auto *parent_node = reinterpret_cast<InternalPage *>(parent_page->GetData());
@@ -291,20 +314,96 @@ auto BPLUSTREE_TYPE::Split(N *node) -> N * {
 }
 
 
+// (1) try to steal one item from the left sibling
+// (2) if not possible, try to coalesce with the left sibling
+// (3) if not possible, try to steal one item from the right sibling
+// (4) if not possible, try to coalesce with the right sibling
+// (5) if still not possible, we are at the root. Just return.
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node) -> bool {}
+auto BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node) -> bool {
+  auto parent_page = buffer_pool_manager_->FetchPage(node->GetParentPageId());
+  auto *parent_node = reinterpret_cast<InternalPage *>(parent_page->GetData());
+
+  auto index = parent_node->ValueIndex(node->GetPageId());
+
+  // "node" has a left sibling
+  if (index > 0) {
+    auto left_sibling_page = buffer_pool_manager_->FetchPage(parent_node->ValueAt(index-1));
+    auto left_sibling_node = reinterpret_cast<N*>(left_sibling_page->GetData());
+
+    // It's fine to steal one item from the left sibling
+    if (left_sibling_node->GetSize() > left_sibling_node->GetMinSize()) {
+      Redistribute(node, left_sibling_node, true);
+
+      buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
+      buffer_pool_manager_->UnpinPage(left_sibling_node->GetPageid(), true);
+      return true;
+    }
+
+    // coalesce with the left sibling
+    Coalesce(node, left_sibling_node, true);
+    buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
+    buffer_pool_manager_->UnpinPage(left_sibling_node->GetPageId(), true);
+    return true;
+  }
+
+  // "node" has a right sibling
+  if (index < parent_node->GetSize() - 1) {
+    auto right_sibling_page = buffer_pool_manager_->FetchPage(parent_node->ValueAt(index + 1));
+    auto right_sibling_node = reinterpret_cast<N*>(right_sibling_page->GetData());
+
+    if (right_sibling_node->GetSize() > right_sibling_node->GetMinSize()) {
+      Redistribute(node, right_sibling_node, false);
+
+      buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
+      buffer_pool_manager_->UnpinPage(right_sibling_node->GetPageId(), true);
+      return true;
+    }
+
+    Coalesce(node, right_sibling_node, false);
+    buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
+    buffer_pool_manager_->UnpinPage(right_sibling_node->GetPageId(), true);
+  }
+}
 
 
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling) -> bool {}
+auto BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling, const KeyType &middle_key) -> bool {
 
+}
 
+// "index": the index of "node" in "parent"
 template <typename KeyType, typename ValueType, typename KeyComparator>
 template <typename N>
-void BPlusTree<KeyType, ValueType, KeyComparator>::Redistribute(N *node, N *sibling, bool is_left_sibling) {}
+void BPlusTree<KeyType, ValueType, KeyComparator>::Redistribute(N *node, N *sibling, bool is_left_sibling,
 
+  BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index) {
+  if (node->IsLeafPage()) {
+    auto leaf_node = reinterpret_cast<LeafPage *>(node);
+    auto sibling_leaf_node = reinterpret_cast<LeafPage *>(sibling);
+    if (is_left_sibling) {
+      sibling_leaf_node->MoveLastToFrontOf(leaf_node);
+      parent->SetKeyAt(index, leaf_node->KeyAt(0));
+    } else {
+      sibling_leaf_node->MoveFirstToEndOf(leaf_node);
+      parent->SetKeyAt(index, sibling_leaf_node->KeyAt(0));
+    }
+  } else {
+
+    auto internal_node = reinterpret_cast<InternalPage*>(node);
+    auto sibling_internal_node = reinterpret_cast<InternalPage*>(sibling);
+
+    if (is_left_sibling) {
+      sibling_internal_node->MoveLastToHeadOf(internal_node, buffer_pool_manager_, parent->KeyAt(index));
+      parent->SetKeyAt(index, internal_node.KeyAt(0));
+    } else {
+      sibling_internal_node->MoveFirsttoEndof(internal_node, buffer_pool_manager_, parent->KeyAt(index+1));
+      parent->SetKeyAt(index+1, sibling_internal_node->KeyAt(0));
+    }
+  }
+}
 
 /**
  * This method is used for debug only, You don't need to modify

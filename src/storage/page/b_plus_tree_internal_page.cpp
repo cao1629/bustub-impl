@@ -51,10 +51,14 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType { return array_[index].second; }
 
+// [1]
 // I split one page, and now I have an old page and a new page.
 // I need to insert an item for the new page into this page.
 // I first need to find the item for the old page, and then insert the new item after it.
 // So I'm sure that "value" is in this page.
+//
+// [2]
+// I try to redistribute or coalesce one page. I need to find its sibling.
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
   auto it = std::find_if(array_, array_+GetSize(), [&value](const auto &item) {
