@@ -154,9 +154,12 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
 }
 
 
+// used for coalecing.
+// "recipient" is always on the left.
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
   recipient->CopyToEnd(array_, GetSize());
+  recipient->SetNextPageId(GetNextPageId());
   SetSize(0);
 }
 

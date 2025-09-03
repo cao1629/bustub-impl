@@ -45,6 +45,8 @@ class BPlusTreeInternalPage : public BPlusTreePage {
 
   auto ValueAt(int index) const -> ValueType;
 
+  void RemoveAt(int index);
+
   // Now I am in an internal page. Given a key, find the page on the next level to go down.
   auto FindNextLevelPage(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
 

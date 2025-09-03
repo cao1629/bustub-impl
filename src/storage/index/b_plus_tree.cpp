@@ -321,7 +321,7 @@ auto BPLUSTREE_TYPE::Split(N *node) -> N * {
 // (5) if still not possible, we are at the root. Just return.
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node) -> bool {
+auto BPLUSTREE_TYPE::RedistributeOrCoalesce(N *node) -> bool {
   auto parent_page = buffer_pool_manager_->FetchPage(node->GetParentPageId());
   auto *parent_node = reinterpret_cast<InternalPage *>(parent_page->GetData());
 
@@ -367,10 +367,45 @@ auto BPLUSTREE_TYPE::CoalesceOrRedistribute(N *node) -> bool {
   }
 }
 
-
+// After we remove an item from a node, we need to redistribute or coalesce.
+// We failed to redistribute, so we now coalesce with the sibling node.
+// If we coalesce with the left sibling, we move all items of "node" to the left sibling and delete "node".
+// if we coalesce with the right sibling, we move all items of the right sibling to "node" and delete the right sibling.
+// "index": parent[index] points to "node"
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling, const KeyType &middle_key) -> bool {
+void BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling,
+  BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index) {
+
+  if (node->IsLeafPage()) {
+    auto leaf_node = reinterpret_cast<LeafPage*>(node);
+    auto sibling_leaf_node = reinterpret_cast<LeafPage*>(sibling);
+    if (is_left_sibling) {
+      leaf_node->SetKeyAt(0, parent->KeyAt(index));
+      leaf_node->MoveAllTo(sibling);
+      parent->RemoveAt(index);
+    } else {
+      sibling_leaf_node->SetKeyAt(0, parent->KeyAt(index+1));
+      sibling_leaf_node->MoveAllTo(leaf_node);
+      parent->RemoveAt(index+1);
+    }
+  } else {
+    auto internal_node = reinterpret_cast<InternalPage*>(node);
+    auto sibling_internal_node = reinterpret_cast<InternalPage*>(sibling);
+    if (is_left_sibling) {
+      internal_node->SetKeyAt(0, parent->KeyAt(index));
+      internal_node->MoveAllTo(sibling_internal_node);
+      parent->RemoveAt(index);
+    } else {
+      sibling_internal_node->SetKeyAt(0, parent->KeyAt(index+1));
+      sibling_internal_node->MoveAllTo(internal_node);
+      parent->RemoveAt(index+1);
+    }
+  }
+
+  if (parent->GetSize() < parent->GetMinSize()) {
+    RedistributeOrCoalesce(parent);
+  }
 
 }
 

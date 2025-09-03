@@ -84,14 +84,14 @@ class BPlusTree {
   // coalesce: move all items from "node" to its sibling, then delete "node"
   // redistribute: move one item from sibling to "node", no node is deleted
   template <typename N>
-  auto CoalesceOrRedistribute(N *node) -> bool;
+  auto RedistributeOrCoalesce(N *node) -> bool;
 
   // return value indicates whether parent node should be deleted after this operation.
   // We coalesce two nodes into one, then one entry in parent node is deleted.
   // We then probably need to coalesce or redistribute the parent node.
   // If we coalesce the parent node with its sibling, then the parent node will be deleted.
   template <typename N>
-  auto Coalesce(N *node, N *sibling, bool is_left_sibling, const KeyType &middle_key) -> bool;
+  void Coalesce(N *node, N *sibling, bool is_left_sibling, BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index);
 
   template <typename N>
   void Redistribute(N *node, N *sibling, bool is_left_sibling, BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index);
