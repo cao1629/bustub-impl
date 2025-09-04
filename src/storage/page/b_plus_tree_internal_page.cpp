@@ -144,6 +144,8 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
   SetSize(GetMinSize());
 }
 
+// “recipient” is always on the left.
+// "separator_key" will be the first key of this page.
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
                                                                          BufferPoolManager *buffer_pool_manager,

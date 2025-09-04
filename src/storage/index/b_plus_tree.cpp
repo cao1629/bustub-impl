@@ -328,7 +328,7 @@ auto BPLUSTREE_TYPE::Split(N *node) -> N * {
 // (5) if still not possible, we are at the root. Just return.
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-auto BPLUSTREE_TYPE::RedistributeOrCoalesce(N *node) -> bool {
+ auto BPLUSTREE_TYPE::RedistributeOrCoalesce(N *node) -> bool {
   auto parent_page = buffer_pool_manager_->FetchPage(node->GetParentPageId());
   auto *parent_node = reinterpret_cast<InternalPage *>(parent_page->GetData());
 
@@ -341,15 +341,15 @@ auto BPLUSTREE_TYPE::RedistributeOrCoalesce(N *node) -> bool {
 
     // It's fine to steal one item from the left sibling
     if (left_sibling_node->GetSize() > left_sibling_node->GetMinSize()) {
-      Redistribute(node, left_sibling_node, true);
+      Redistribute(node, left_sibling_node, true, parent_node, index);
 
       buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
-      buffer_pool_manager_->UnpinPage(left_sibling_node->GetPageid(), true);
+      buffer_pool_manager_->UnpinPage(left_sibling_node->GetPageId(), true);
       return true;
     }
 
     // coalesce with the left sibling
-    Coalesce(node, left_sibling_node, true);
+    Coalesce(node, left_sibling_node, true, parent_node, index);
     buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
     buffer_pool_manager_->UnpinPage(left_sibling_node->GetPageId(), true);
     return true;
@@ -368,10 +368,13 @@ auto BPLUSTREE_TYPE::RedistributeOrCoalesce(N *node) -> bool {
       return true;
     }
 
-    Coalesce(node, right_sibling_node, false);
+    Coalesce(node, right_sibling_node, false, parent_node, index);
     buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
     buffer_pool_manager_->UnpinPage(right_sibling_node->GetPageId(), true);
+    return true;
   }
+
+  return false;
 }
 
 // After we remove an item from a node, we need to redistribute or coalesce.
@@ -382,13 +385,13 @@ auto BPLUSTREE_TYPE::RedistributeOrCoalesce(N *node) -> bool {
 INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
 void BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling,
-  BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index) {
+  InternalPage *parent, int index) {
 
   if (node->IsLeafPage()) {
     auto leaf_node = reinterpret_cast<LeafPage*>(node);
     auto sibling_leaf_node = reinterpret_cast<LeafPage*>(sibling);
     if (is_left_sibling) {
-      leaf_node->MoveAllTo(sibling);
+      leaf_node->MoveAllTo(sibling_leaf_node);
       parent->RemoveAt(index);
     } else {
       sibling_leaf_node->MoveAllTo(leaf_node);
@@ -399,11 +402,12 @@ void BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling,
     auto sibling_internal_node = reinterpret_cast<InternalPage*>(sibling);
     if (is_left_sibling) {
       internal_node->SetKeyAt(0, parent->KeyAt(index));
-      internal_node->MoveAllTo(sibling_internal_node);
+      auto separator_key = parent->KeyAt(index);
+      internal_node->MoveAllTo(sibling_internal_node, buffer_pool_manager_, separator_key);
       parent->RemoveAt(index);
     } else {
-      sibling_internal_node->SetKeyAt(0, parent->KeyAt(index+1));
-      sibling_internal_node->MoveAllTo(internal_node);
+      auto separator_key = parent->KeyAt(index+1);
+      sibling_internal_node->MoveAllTo(internal_node, buffer_pool_manager_, separator_key);
       parent->RemoveAt(index+1);
     }
   }
@@ -411,19 +415,19 @@ void BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling,
   if (parent->GetSize() < parent->GetMinSize()) {
     RedistributeOrCoalesce(parent);
   }
-
 }
 
+
 // "index": the index of "node" in "parent"
-template <typename KeyType, typename ValueType, typename KeyComparator>
+INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
-void BPlusTree<KeyType, ValueType, KeyComparator>::Redistribute(N *node, N *sibling, bool is_left_sibling,
-  BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index) {
+void BPLUSTREE_TYPE::Redistribute(N *node, N *sibling, bool is_left_sibling,
+  InternalPage *parent, int index) {
   if (node->IsLeafPage()) {
     auto leaf_node = reinterpret_cast<LeafPage *>(node);
     auto sibling_leaf_node = reinterpret_cast<LeafPage *>(sibling);
     if (is_left_sibling) {
-      sibling_leaf_node->MoveLastToFrontOf(leaf_node);
+      sibling_leaf_node->MoveLastToHeadOf(leaf_node);
       parent->SetKeyAt(index, leaf_node->KeyAt(0));
     } else {
       sibling_leaf_node->MoveFirstToEndOf(leaf_node);
@@ -436,9 +440,9 @@ void BPlusTree<KeyType, ValueType, KeyComparator>::Redistribute(N *node, N *sibl
 
     if (is_left_sibling) {
       sibling_internal_node->MoveLastToHeadOf(internal_node, buffer_pool_manager_, parent->KeyAt(index));
-      parent->SetKeyAt(index, internal_node.KeyAt(0));
+      parent->SetKeyAt(index, internal_node->KeyAt(0));
     } else {
-      sibling_internal_node->MoveFirsttoEndof(internal_node, buffer_pool_manager_, parent->KeyAt(index+1));
+      sibling_internal_node->MoveFirstToEndOf(internal_node, buffer_pool_manager_, parent->KeyAt(index+1));
       parent->SetKeyAt(index+1, sibling_internal_node->KeyAt(0));
     }
   }

@@ -91,10 +91,10 @@ class BPlusTree {
   // We then probably need to coalesce or redistribute the parent node.
   // If we coalesce the parent node with its sibling, then the parent node will be deleted.
   template <typename N>
-  void Coalesce(N *node, N *sibling, bool is_left_sibling, BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index);
+  void Coalesce(N *node, N *sibling, bool is_left_sibling, InternalPage *parent, int index);
 
   template <typename N>
-  void Redistribute(N *node, N *sibling, bool is_left_sibling, BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index);
+  void Redistribute(N *node, N *sibling, bool is_left_sibling, InternalPage *parent, int index);
 
  private:
   void UpdateRootPageId(int insert_record = 0);
