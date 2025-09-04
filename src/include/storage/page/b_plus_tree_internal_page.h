@@ -18,7 +18,7 @@ namespace bustub {
 
 #define B_PLUS_TREE_INTERNAL_PAGE_TYPE BPlusTreeInternalPage<KeyType, ValueType, KeyComparator>
 #define INTERNAL_PAGE_HEADER_SIZE 24
-#define INTERNAL_PAGE_SIZE ((BUSTUB_PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (sizeof(ItemType)))
+#define INTERNAL_PAGE_SIZE ((BUSTUB_PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (sizeof(MappingType)))
 /**
  * Store n indexed keys and n+1 child pointers (page_id) within internal page.
  * Pointer PAGE_ID(i) points to a subtree in which all keys K satisfy:
@@ -47,12 +47,14 @@ class BPlusTreeInternalPage : public BPlusTreePage {
 
   void RemoveAt(int index);
 
-  // Now I am in an internal page. Given a key, find the page on the next level to go down.
+
   auto FindNextLevelPage(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
 
   auto ValueIndex(const ValueType &value) const -> int;
 
   void InsertAfterValue(const ValueType &prev, const KeyType &key, const ValueType &value);
+
+  void InsertFirst(const KeyType &key, const ValueType &value);
 
   // We want to move the first item to the recipient, but the first item has no key. We need to provide
   // a key.
@@ -72,12 +74,12 @@ class BPlusTreeInternalPage : public BPlusTreePage {
 
  private:
   // Flexible array member for page data.
-  ItemType array_[1];
+  MappingType array_[1];
 
-  void CopyToEnd(const ItemType &item, BufferPoolManager *buffer_pool_manager);
+  void CopyToEnd(const MappingType &item, BufferPoolManager *buffer_pool_manager);
 
-  void CopyToHead(const ItemType &item, BufferPoolManager *buffer_pool_manager);
+  void CopyToHead(const MappingType &item, BufferPoolManager *buffer_pool_manager);
 
-  void CopyNToEnd(ItemType *items, int size, BufferPoolManager *buffer_pool_manager);
+  void CopyNToEnd(MappingType *items, int size, BufferPoolManager *buffer_pool_manager);
 };
 }  // namespace bustub

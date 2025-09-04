@@ -74,21 +74,29 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const ->
 }
 
 
+// I'm sure "prev" exists in this page.
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertAfterValue(const ValueType &prev, const KeyType &key, const ValueType &value) {
-  auto index = ValueIndex(value);
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertAfterValue(const ValueType &prev, const KeyType &key, const ValueType &value) {
+  auto index = ValueIndex(prev);
   std::move(array_+index+1, array_+GetSize(), array_+index+2);
   *(array_+index+1) = {key, value};
   IncreaseSize(1);
 }
 
+// Now I'm an internal page, and I'm empty.
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertFirst(const KeyType &key, const ValueType &value) {
+  *array_ = {key, value};
+  IncreaseSize(1);
+}
 
+// Now I am in an internal page. Given a key, find the page on the next level to go down.
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindNextLevelPage(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
   // std::lower_bound to find the first element that is not less than "key".
   auto it = std::lower_bound(
       array_ + 1, array_ + GetSize(), key,
-      [&key, &comparator](const auto &pair, const KeyType &k) { return comparator(pair.first, k) < 0; });
+      [&comparator](const auto &pair, const KeyType &k) { return comparator(pair.first, k) < 0; });
 
   // v1 k2 v2 ..... kn v4 < key
   if (it == array_ + GetSize()) {
@@ -146,7 +154,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToHead(const ItemType &item, BufferPoolManager *buffer_pool_manager) {
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToHead(const MappingType &item, BufferPoolManager *buffer_pool_manager) {
   std::move(array_, array_+GetSize(), array_+1);
   *array_ = item;
   IncreaseSize(1);
@@ -158,7 +166,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToHead(const ItemType &item, BufferPool
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToEnd(const ItemType &item, BufferPoolManager *buffer_pool_manager) {
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToEnd(const MappingType &item, BufferPoolManager *buffer_pool_manager) {
   *(array_+GetSize()) = item;
   IncreaseSize(1);
 
@@ -169,7 +177,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToEnd(const ItemType &item, BufferPoolM
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNToEnd(ItemType *items, int size, BufferPoolManager *buffer_pool_manager) {
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNToEnd(MappingType *items, int size, BufferPoolManager *buffer_pool_manager) {
   std::move(items, items+size, array_+GetSize());
   IncreaseSize(size);
 

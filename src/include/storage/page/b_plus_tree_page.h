@@ -20,7 +20,7 @@
 
 namespace bustub {
 
-#define ItemType std::pair<KeyType, ValueType>
+#define MappingType std::pair<KeyType, ValueType>
 
 #define INDEX_TEMPLATE_ARGUMENTS template <typename KeyType, typename ValueType, typename KeyComparator>
 

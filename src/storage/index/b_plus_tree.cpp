@@ -71,8 +71,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   auto leaf_page = FindLeaf(key, transaction);
   auto *leaf_node = reinterpret_cast<LeafPage*>(leaf_page->GetData());
 
-  auto old_size = leaf_page->GetSize();
-  auto new_size = leaf_node->Insert(key, value);
+  auto old_size = leaf_node->GetSize();
+  auto new_size = leaf_node->Insert(key, value, comparator_);
 
   // "key" already exists in this leaf page
   if (old_size == new_size) {
@@ -92,7 +92,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   leaf_node->SetNextPageId(new_right_sibling->GetPageId());
 
   // Insert one item into parent.
-  InsertIntoParent(leaf_node, new_right_sibling);
+  InsertIntoParent(leaf_node, new_right_sibling, new_right_sibling->KeyAt(0));
   return true;
 }
 
@@ -129,7 +129,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
   }
 
   // need to redistribute or coalesce
-  CoalesceOrRedistribute(leaf_node);
+  RedistributeOrCoalesce(leaf_node);
 }
 
 /*****************************************************************************
@@ -232,7 +232,7 @@ auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key, Transaction *transaction) -> P
 
   while (!p->IsLeafPage()) {
     auto *internal_node = reinterpret_cast<InternalPage *>(p);
-    auto child_page_id = internal_node->FindChild(key, comparator_);
+    auto child_page_id = internal_node->FindNextLevelPage(key, comparator_);
 
     buffer_pool_manager_->UnpinPage(p->GetPageId(), false);
     page = buffer_pool_manager_->FetchPage(child_page_id);
@@ -245,6 +245,7 @@ auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key, Transaction *transaction) -> P
 
 // After splitting the parent page, we need to insert a new k/v pair into its parent.
 // k: the first key in the new node
+// after inserting k/v pair into the parent, we do not need the first key any more if "new_node" is an internl page
 // v: the page id of the new node
 //
 // [1] If the old node is the root, we need to create a new root page.
@@ -256,13 +257,16 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, BPlusTreePage *ne
   // The old node is the root. Now we need a new root page with two items.
   if (new_node->IsRootPage()) {
     auto new_root_page = buffer_pool_manager_->NewPage(&root_page_id_);
-    auto new_root_node = reinterpret_cast<LeafPage *>(new_root_page->GetData());
+    auto new_root_node = reinterpret_cast<InternalPage*>(new_root_page->GetData());
     new_root_node->Init(root_page_id_, INVALID_PAGE_ID, internal_max_size_);
 
-    old_node->SetParentPageId(new_root_page->GetPageId());
-    new_node->SetParentPageId(new_root_page->GetPageId());
+    auto old_leaf_node = reinterpret_cast<LeafPage*>(old_node);
+    auto new_leaf_node = reinterpret_cast<LeafPage*>(new_node);
 
-    new_root_node->Insert(key, new_node->GetPageId(), comparator_);
+    new_root_node->InsertFirst(old_leaf_node->KeyAt(0), old_node->GetPageId());
+    new_root_node->InsertAfterValue(old_leaf_node->GetPageId(), key, new_leaf_node->GetPageId());
+
+    buffer_pool_manager_->UnpinPage(new_root_node->GetPageId(), true);
     return;
   }
 
@@ -280,10 +284,9 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, BPlusTreePage *ne
   }
 
   auto new_parent_sibling = Split(parent_node);
-  const auto &new_key = new_parent_sibling->GetKey();
+  const auto &new_key = new_parent_sibling->KeyAt(0);
   InsertIntoParent(parent_node, new_parent_sibling, new_key);
 }
-
 
 // (1) new page
 // (2) move half
@@ -297,7 +300,11 @@ auto BPLUSTREE_TYPE::Split(N *node) -> N * {
   auto new_page = buffer_pool_manager_->NewPage(&new_page_id);
 
   N *new_node = reinterpret_cast<N*>(new_page->GetData());
-  new_node->SetPageType(node->SetPageType());
+  if (node->IsLeafPage()) {
+    new_node->SetPageType(IndexPageType::LEAF_PAGE);
+  } else {
+    new_node->SetPageType(IndexPageType::INTERNAL_PAGE);
+  }
 
   if (node->IsLeafPage()) {
     auto *leaf_page = reinterpret_cast<LeafPage*>(node);
@@ -307,7 +314,7 @@ auto BPLUSTREE_TYPE::Split(N *node) -> N * {
   } else {
     auto *internal_page = reinterpret_cast<InternalPage*>(node);
     auto *new_internal_page = reinterpret_cast<InternalPage*>(new_node);
-    new_internal_page->Init(new_page_id, node->GetParentPageid(), internal_max_size_);
+    new_internal_page->Init(new_page_id, node->GetParentPageId(), internal_max_size_);
     internal_page->MoveHalfTo(new_internal_page, buffer_pool_manager_);
   }
   return new_node;
@@ -354,7 +361,7 @@ auto BPLUSTREE_TYPE::RedistributeOrCoalesce(N *node) -> bool {
     auto right_sibling_node = reinterpret_cast<N*>(right_sibling_page->GetData());
 
     if (right_sibling_node->GetSize() > right_sibling_node->GetMinSize()) {
-      Redistribute(node, right_sibling_node, false);
+      Redistribute(node, right_sibling_node, false, parent_node, index);
 
       buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
       buffer_pool_manager_->UnpinPage(right_sibling_node->GetPageId(), true);
@@ -381,11 +388,9 @@ void BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling,
     auto leaf_node = reinterpret_cast<LeafPage*>(node);
     auto sibling_leaf_node = reinterpret_cast<LeafPage*>(sibling);
     if (is_left_sibling) {
-      leaf_node->SetKeyAt(0, parent->KeyAt(index));
       leaf_node->MoveAllTo(sibling);
       parent->RemoveAt(index);
     } else {
-      sibling_leaf_node->SetKeyAt(0, parent->KeyAt(index+1));
       sibling_leaf_node->MoveAllTo(leaf_node);
       parent->RemoveAt(index+1);
     }
@@ -413,7 +418,6 @@ void BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling,
 template <typename KeyType, typename ValueType, typename KeyComparator>
 template <typename N>
 void BPlusTree<KeyType, ValueType, KeyComparator>::Redistribute(N *node, N *sibling, bool is_left_sibling,
-
   BPlusTreeInternalPage<KeyType, ValueType, KeyComparator> *parent, int index) {
   if (node->IsLeafPage()) {
     auto leaf_node = reinterpret_cast<LeafPage *>(node);

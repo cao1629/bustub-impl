@@ -19,7 +19,7 @@ namespace bustub {
 
 #define B_PLUS_TREE_LEAF_PAGE_TYPE BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>
 #define LEAF_PAGE_HEADER_SIZE 28
-#define LEAF_PAGE_SIZE ((BUSTUB_PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / sizeof(ItemType))
+#define LEAF_PAGE_SIZE ((BUSTUB_PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / sizeof(MappingType))
 
 /**
  * Store indexed key and record id(record id = page id combined with slot id,
@@ -77,13 +77,13 @@ class BPlusTreeLeafPage : public BPlusTreePage {
  private:
   page_id_t next_page_id_;
   // Flexible array member for page data.
-  ItemType array_[1];
+  MappingType array_[1];
 
 
-  void CopyToEnd(const ItemType &item);
+  void CopyToEnd(const MappingType &item);
 
-  void CopyToHead(const ItemType &item);
+  void CopyToHead(const MappingType &item);
 
-  void CopyNToEnd(ItemType *items, int size);
+  void CopyNToEnd(MappingType *items, int size);
 };
 }  // namespace bustub

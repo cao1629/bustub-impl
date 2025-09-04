@@ -58,7 +58,7 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType { return arra
 // If the return value is the size of this page, means all keys in this page are less than "key".
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &keyComparator) const -> int {
-  auto it = std::lower_bound(array_.begin(), array_.end(), key,
+  auto it = std::lower_bound(array_, array_ + GetSize(), key,
     [&keyComparator](const auto &pair, const KeyType &k) { return keyComparator(pair.first, k) < 0; });
   return std::distance(array_, it);
 }
@@ -158,13 +158,13 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
 // "recipient" is always on the left.
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
-  recipient->CopyToEnd(array_, GetSize());
+  recipient->CopyNToEnd(array_, GetSize());
   recipient->SetNextPageId(GetNextPageId());
   SetSize(0);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyToHead(const ItemType &item) {
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyToHead(const MappingType &item) {
   std::move(array_, array_+GetSize(), array_+1);
 
   // copy
@@ -174,13 +174,13 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyToHead(const ItemType &item) {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyToEnd(const ItemType &item) {
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyToEnd(const MappingType &item) {
   array_[GetSize()] = item;
   IncreaseSize(1);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNToEnd(ItemType *items, int size) {
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNToEnd(MappingType *items, int size) {
   std::move(items, items+size, array_+GetSize());
   IncreaseSize(size);
 }

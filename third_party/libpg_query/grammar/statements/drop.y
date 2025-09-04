@@ -2,7 +2,7 @@
  *
  *		QUERY:
  *
- *		DROP itemtype [ IF EXISTS ] itemname [, itemname ...]
+ *		DROP MappingType [ IF EXISTS ] itemname [, itemname ...]
  *           [ RESTRICT | CASCADE ]
  *
  *****************************************************************************/
