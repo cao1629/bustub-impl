@@ -68,27 +68,33 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparato
 // Then insert the key-value pair at index i, and move the rest part to the right by one position.
 // Return the new size after insertion. If "key" already exists, do nothing and return the current size.
 INDEX_TEMPLATE_ARGUMENTS
-int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value,
-                                                                  const KeyComparator &keyComparator) {
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value,
+                                                                  const KeyComparator &keyComparator) -> bool {
+  if (GetSize() == 0) {
+    *array_ = {key, value};
+    IncreaseSize(1);
+    return true;
+  }
+
   auto index = KeyIndex(key, keyComparator);
 
   // check if the key is already in the leaf page
   // if so, do nothing and return the current size.
   if (keyComparator(KeyAt(index), key) == 0) {
-    return GetSize();
+    return false;
   }
 
   // Insert at the end
   if (index == GetSize()) {
     *(array_ + index) = {key, value};
     IncreaseSize(1);
-    return GetSize();
+    return true;
   }
 
-  std::move(array_+index, array_+GetSize(), array_+index+1);
+  std::move_backward(array_+index, array_+GetSize(), array_+GetSize()+1);
   *(array_ + index) = {key, value};
   IncreaseSize(1);
-  return GetSize();
+  return true;
 }
 
 // Given a key, find its value. Return true if exists, false otherwise.
@@ -129,6 +135,12 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetItem(int index) -> MappingType& {
+  return array_[index];
+}
+
+
+INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient) {
   auto first_item = array_[0];
   std::move(array_ + 1, array_ + GetSize(), array_);
@@ -165,7 +177,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyToHead(const MappingType &item) {
-  std::move(array_, array_+GetSize(), array_+1);
+  std::move_backward(array_, array_+GetSize(), array_+GetSize()+1);
 
   // copy
   array_[0] = item;

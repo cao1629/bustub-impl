@@ -47,7 +47,6 @@ class BPlusTreeInternalPage : public BPlusTreePage {
 
   void RemoveAt(int index);
 
-
   auto FindNextLevelPage(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
 
   auto ValueIndex(const ValueType &value) const -> int;

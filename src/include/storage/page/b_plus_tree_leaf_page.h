@@ -57,7 +57,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   auto KeyIndex(const KeyType &key, const KeyComparator &keyComparator) const -> int;
 
   // This method always succeeds.
-  int Insert(const KeyType &key, const ValueType &value, const KeyComparator &keyComparator);
+  auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &keyComparator) -> bool;
 
   // Given a key, find its value. Return true if exists, false otherwise
   auto Find(const KeyType &key, ValueType *value, const KeyComparator &keyComparator) const -> bool;
@@ -72,6 +72,8 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   void MoveHalfTo(BPlusTreeLeafPage *recipient);
 
   void MoveAllTo(BPlusTreeLeafPage *recipient);
+
+  auto GetItem(int index) -> MappingType&;
 
 
  private:

@@ -78,7 +78,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const ->
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertAfterValue(const ValueType &prev, const KeyType &key, const ValueType &value) {
   auto index = ValueIndex(prev);
-  std::move(array_+index+1, array_+GetSize(), array_+index+2);
+  std::move_backward(array_+index+1, array_+GetSize(), array_+GetSize()+1);
   *(array_+index+1) = {key, value};
   IncreaseSize(1);
 }
@@ -157,7 +157,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToHead(const MappingType &item, BufferPoolManager *buffer_pool_manager) {
-  std::move(array_, array_+GetSize(), array_+1);
+  std::move_backward(array_, array_+GetSize(), array_+GetSize()+1);
   *array_ = item;
   IncreaseSize(1);
 
