@@ -125,7 +125,8 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, const KeyComparator 
     return false;
   }
 
-  std::move(array_ + index, array_ + GetSize(), array_ + index - 1);
+  std::move(array_ + index+1, array_ + GetSize(), array_+index);
+  IncreaseSize(-1);
   return true;
 }
 
