@@ -58,7 +58,7 @@ auto TablePage::InsertTuple(const Tuple &tuple, RID *rid, Transaction *txn, Lock
     return false;
   }
 
-  // Otherwise we claim available free space..
+  // Otherwise we claim available free space.
   SetFreeSpacePointer(GetFreeSpacePointer() - tuple.size_);
   memcpy(GetData() + GetFreeSpacePointer(), tuple.data_, tuple.size_);
 
@@ -89,6 +89,7 @@ auto TablePage::InsertTuple(const Tuple &tuple, RID *rid, Transaction *txn, Lock
   return true;
 }
 
+// Given a rid, mark this tuple as deleted. Just set the deleted flag, do not actually reclaim space.
 auto TablePage::MarkDelete(const RID &rid, Transaction *txn, LockManager *lock_manager, LogManager *log_manager)
     -> bool {
   uint32_t slot_num = rid.GetSlotNum();
@@ -136,6 +137,7 @@ auto TablePage::MarkDelete(const RID &rid, Transaction *txn, LockManager *lock_m
   return true;
 }
 
+
 auto TablePage::UpdateTuple(const Tuple &new_tuple, Tuple *old_tuple, const RID &rid, Transaction *txn,
                             LockManager *lock_manager, LogManager *log_manager) -> bool {
   BUSTUB_ASSERT(new_tuple.size_ > 0, "Cannot have empty tuples.");
@@ -155,7 +157,7 @@ auto TablePage::UpdateTuple(const Tuple &new_tuple, Tuple *old_tuple, const RID 
     }
     return false;
   }
-  // If there is not enuogh space to update, we need to update via delete followed by an insert (not enough space).
+  // If there is not enough space to update, we need to update via delete followed by an insert (not enough space).
   if (GetFreeSpaceRemaining() + tuple_size < new_tuple.size_) {
     return false;
   }
@@ -208,6 +210,8 @@ auto TablePage::UpdateTuple(const Tuple &new_tuple, Tuple *old_tuple, const RID 
   return true;
 }
 
+// [1] Commit a deletion
+// [2] Rollback an insertion
 void TablePage::ApplyDelete(const RID &rid, Transaction *txn, LogManager *log_manager) {
   uint32_t slot_num = rid.GetSlotNum();
   BUSTUB_ASSERT(slot_num < GetTupleCount(), "Cannot have more slots than tuples.");
@@ -244,8 +248,11 @@ void TablePage::ApplyDelete(const RID &rid, Transaction *txn, LogManager *log_ma
   uint32_t free_space_pointer = GetFreeSpacePointer();
   BUSTUB_ASSERT(tuple_offset >= free_space_pointer, "Free space appears before tuples.");
 
+  // Reclaim the space by shifting everything to the right
   memmove(GetData() + free_space_pointer + tuple_size, GetData() + free_space_pointer,
           tuple_offset - free_space_pointer);
+
+  // tuple size and tuple offset are set to 0 and ready for reuse.
   SetFreeSpacePointer(free_space_pointer + tuple_size);
   SetTupleSize(slot_num, 0);
   SetTupleOffsetAtSlot(slot_num, 0);
@@ -259,6 +266,8 @@ void TablePage::ApplyDelete(const RID &rid, Transaction *txn, LogManager *log_ma
   }
 }
 
+// We did the deletion operation (set the deleted flag).
+// Now we roll back this operation. (unset the deleted flag).
 void TablePage::RollbackDelete(const RID &rid, Transaction *txn, LogManager *log_manager) {
   // Log the rollback.
   /**

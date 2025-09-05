@@ -86,6 +86,7 @@ auto TableHeap::InsertTuple(const Tuple &tuple, RID *rid, Transaction *txn) -> b
   // We are not, in fact, double unlatching. See the invariant above.
   cur_page->WUnlatch();
   buffer_pool_manager_->UnpinPage(cur_page->GetTablePageId(), true);
+
   // Update the transaction's write set.
   txn->GetWriteSet()->emplace_back(*rid, WType::INSERT, Tuple{}, this);
   return true;
@@ -179,8 +180,14 @@ auto TableHeap::GetTuple(const RID &rid, Tuple *tuple, Transaction *txn, bool ac
 auto TableHeap::Begin(Transaction *txn) -> TableIterator {
   // Start an iterator from the first page.
   // TODO(Wuwen): Hacky fix for now. Removing empty pages is a better way to handle this.
+
+  // default constructor: {INVALID_PAGE_ID, 0}
   RID rid;
   auto page_id = first_page_id_;
+
+  // If we have deleted all the tuples in a page, we need to skip to the next page.
+  // When do we have page_id == INVALID_PAGE_ID?
+  // All pages are empty. We reached the end of the table. The last page's next_page_id is INVALID_PAGE_ID.
   while (page_id != INVALID_PAGE_ID) {
     auto page = static_cast<TablePage *>(buffer_pool_manager_->FetchPage(page_id));
     page->RLatch();

@@ -59,6 +59,8 @@ class TableIterator {
 
  private:
   TableHeap *table_heap_;
+
+  // the tuple we're currently landing on
   Tuple *tuple_;
   Transaction *txn_;
 };

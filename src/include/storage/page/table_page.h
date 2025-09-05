@@ -20,6 +20,7 @@
 #include "storage/page/page.h"
 #include "storage/table/tuple.h"
 
+// 1000 0000 0000 0000 0000 0000 0000 0000
 static constexpr uint64_t DELETE_MASK = (1U << (8 * sizeof(uint32_t) - 1));
 
 namespace bustub {
@@ -142,7 +143,7 @@ class TablePage : public Page {
   static_assert(sizeof(page_id_t) == 4);
 
   static constexpr size_t SIZE_TABLE_PAGE_HEADER = 24;
-  static constexpr size_t SIZE_TUPLE = 8;
+  static constexpr size_t SIZE_TUPLE = 8; // tuple offset + tuple size
   static constexpr size_t OFFSET_PREV_PAGE_ID = 8;
   static constexpr size_t OFFSET_NEXT_PAGE_ID = 12;
   static constexpr size_t OFFSET_FREE_SPACE = 16;
@@ -197,6 +198,7 @@ class TablePage : public Page {
   }
 
   /** @return tuple size with the deleted flag set */
+  // Deleted flag exists from delete operation until commit.
   static auto SetDeletedFlag(uint32_t tuple_size) -> uint32_t {
     return static_cast<uint32_t>(tuple_size | DELETE_MASK);
   }
