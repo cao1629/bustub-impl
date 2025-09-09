@@ -14,14 +14,51 @@
 
 #include "execution/executors/delete_executor.h"
 
+#include "type/integer_type.h"
+
 namespace bustub {
 
 DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx) {}
+    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {
+  table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
+  table_indexes_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
+}
 
-void DeleteExecutor::Init() { throw NotImplementedException("DeleteExecutor is not implemented"); }
+void DeleteExecutor::Init() {
+  child_executor_->Init();
+}
 
-auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool { return false; }
+auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
+  if (done_) {
+    return false;
+  }
+
+  Tuple to_delete_tuple{};
+  RID emit_rid{};
+  int delete_count = 0;
+
+  while (child_executor_->Next(&to_delete_tuple, &emit_rid)) {
+    bool deleted = table_info_->table_->MarkDelete(emit_rid, exec_ctx_->GetTransaction());
+
+    if (deleted) {
+      for (const auto index_info : table_indexes_) {
+        index_info->index_->DeleteEntry(
+          to_delete_tuple.KeyFromTuple(table_info_->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()),
+          emit_rid,
+          exec_ctx_->GetTransaction());
+      }
+    }
+
+    delete_count++;
+  }
+
+  std::vector<Value> values{};
+  values.emplace_back(INTEGER, delete_count);
+  *tuple = {values, &GetOutputSchema()};
+  done_ = true;
+
+  return true;
+}
 
 }  // namespace bustub

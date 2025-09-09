@@ -217,7 +217,7 @@ class Catalog {
       return NULL_INDEX_INFO;
     }
 
-    // Construct index metdata
+    // Construct index metadata
     auto meta = std::make_unique<IndexMetadata>(index_name, table_name, &schema, key_attrs);
 
     // Construct the index, take ownership of metadata
@@ -367,8 +367,8 @@ class Catalog {
   std::unordered_map<index_oid_t, std::unique_ptr<IndexInfo>> indexes_;
 
   /** Map table name -> index names -> index identifiers. */
+  // Each table might have more than one index.
   std::unordered_map<std::string, std::unordered_map<std::string, index_oid_t>> index_names_;
-
   /** The next index identifier to be used. */
   std::atomic<index_oid_t> next_index_oid_{0};
 };

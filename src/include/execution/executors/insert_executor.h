@@ -57,6 +57,19 @@ class InsertExecutor : public AbstractExecutor {
  private:
   /** The insert plan node to be executed*/
   const InsertPlanNode *plan_;
+
+  // ValuesExecutor, ProjectionExecutor .....
+  std::unique_ptr<AbstractExecutor> child_executor_;
+
+  // The table into which we are inserting.
+  const TableInfo *table_info_;
+
+  // A table might have more than one index. When inserting new data into a table, we need to
+  // update all of its indexes.
+  std::vector<IndexInfo*> table_indexes_;
+
+  // when we are done inserting all rows, Next() will return false.
+  bool done_ = false;
 };
 
 }  // namespace bustub

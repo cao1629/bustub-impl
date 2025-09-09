@@ -33,6 +33,9 @@ class Transaction;
  * the index key, so it is the index's responsibility to maintain such a
  * mapping relation and does the conversion between tuple key and index key
  */
+// This class is for constructing an Index object.
+// When constructing a new Index object, we only need to know the schema of the table, and
+// which columns are we going to use to build the index.
 class IndexMetadata {
  public:
   IndexMetadata() = delete;
