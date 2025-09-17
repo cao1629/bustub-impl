@@ -21,6 +21,8 @@ BPLUSTREE_INDEX_TYPE::BPlusTreeIndex(std::unique_ptr<IndexMetadata> &&metadata, 
       comparator_(GetMetadata()->GetKeySchema()),
       container_(GetMetadata()->GetName(), buffer_pool_manager, comparator_) {}
 
+// "key": index key
+// "rid": value of leaf pages
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_INDEX_TYPE::InsertEntry(const Tuple &key, RID rid, Transaction *transaction) {
   // construct insert index key
@@ -39,6 +41,9 @@ void BPLUSTREE_INDEX_TYPE::DeleteEntry(const Tuple &key, RID rid, Transaction *t
   container_.Remove(index_key, transaction);
 }
 
+// Given a key, find the matching rids.
+// Store the matching rids in "result".
+// Since our b+ tree doesn't allow duplicate keys, we will just get none or one rid.
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_INDEX_TYPE::ScanKey(const Tuple &key, std::vector<RID> *result, Transaction *transaction) {
   // construct scan index key

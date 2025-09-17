@@ -7,6 +7,9 @@ ValuesExecutor::ValuesExecutor(ExecutorContext *exec_ctx, const ValuesPlanNode *
 
 void ValuesExecutor::Init() { cursor_ = 0; }
 
+
+// out parameter "rid" is not used
+// We produce the next row, which is a tuple from the values plan (data in memory)
 auto ValuesExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (cursor_ >= plan_->GetValues().size()) {
     return false;

@@ -38,8 +38,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   RID emit_rid{};
 
   // Both "to_insert_tuple" and "insert_rid" are out parameters.
-  // The tuple emitted by the child executor might be already in the table. Might be not.
-  // But anyway, we will insert this tuple into a new place.
+  // If child_executor_ is a ValuesExecutor. Next() produces a tuple without rid.
   while (child_executor_->Next(&to_insert_tuple, &emit_rid)) {
     // Insert a tuple from child executor's Next() method
     // "rid" will be updated by InsertTuple() method.
@@ -49,11 +48,10 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     for (const auto index_info : table_indexes_) {
       // key: index key
       // value: rid, already updated by InsertTuple() method
-      index_info->index_->InsertEntry(
-        to_insert_tuple.KeyFromTuple(table_info_->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()),
-        *rid,
-        exec_ctx_->GetTransaction()
-        );
+      auto index_key = to_insert_tuple.KeyFromTuple(table_info_->schema_, index_info->key_schema_,
+        index_info->index_->GetKeyAttrs());
+
+      index_info->index_->InsertEntry(index_key, *rid, exec_ctx_->GetTransaction());
     }
     insert_count++;
   }

@@ -23,6 +23,7 @@ void SeqScanExecutor::Init() {
   table_iter_ = table_info_->table_->Begin(exec_ctx_->GetTransaction());
 }
 
+
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   do {
     if (table_iter_ == table_info_->table_->End()) {

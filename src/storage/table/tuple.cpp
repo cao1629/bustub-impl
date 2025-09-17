@@ -21,6 +21,8 @@
 namespace bustub {
 
 // TODO(Amadou): It does not look like nulls are supported. Add a null bitmap?
+// key_values and key_schema
+// encode values into an index key
 Tuple::Tuple(std::vector<Value> values, const Schema *schema) : allocated_(true) {
   assert(values.size() == schema->GetColumnCount());
 

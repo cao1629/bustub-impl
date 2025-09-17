@@ -43,10 +43,9 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
     if (deleted) {
       for (const auto index_info : table_indexes_) {
-        index_info->index_->DeleteEntry(
-          to_delete_tuple.KeyFromTuple(table_info_->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs()),
-          emit_rid,
-          exec_ctx_->GetTransaction());
+        auto index_key = to_delete_tuple.KeyFromTuple(table_info_->schema_, index_info->key_schema_,
+          index_info->index_->GetKeyAttrs());
+        index_info->index_->DeleteEntry(index_key, emit_rid, exec_ctx_->GetTransaction());
       }
     }
 

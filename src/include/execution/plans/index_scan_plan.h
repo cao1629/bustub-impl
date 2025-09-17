@@ -24,14 +24,15 @@ namespace bustub {
  * IndexScanPlanNode identifies a table that should be scanned with an optional predicate.
  */
 class IndexScanPlanNode : public AbstractPlanNode {
+
  public:
   /**
    * Creates a new index scan plan node.
    * @param output the output format of this scan plan node
    * @param table_oid the identifier of table to be scanned
    */
-  IndexScanPlanNode(SchemaRef output, index_oid_t index_oid)
-      : AbstractPlanNode(std::move(output), {}), index_oid_(index_oid) {}
+  IndexScanPlanNode(SchemaRef output, index_oid_t index_oid, AbstractExpressionRef filter_predicate = nullptr)
+      : AbstractPlanNode(std::move(output), {}), index_oid_(index_oid), filter_predicate_(std::move(filter_predicate)) {}
 
   auto GetType() const -> PlanType override { return PlanType::IndexScan; }
 
@@ -44,6 +45,7 @@ class IndexScanPlanNode : public AbstractPlanNode {
   index_oid_t index_oid_;
 
   // Add anything you want here for index lookup
+  AbstractExpressionRef filter_predicate_;
 
  protected:
   auto PlanNodeToString() const -> std::string override {
