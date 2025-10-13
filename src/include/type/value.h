@@ -85,6 +85,7 @@ class Value {
   // Access the raw variable length data
   inline auto GetData() const -> const char * { return Type::GetInstance(type_id_)->GetData(*this); }
 
+  // reinterpret_cast can also cast a union.
   template <class T>
   inline auto GetAs() const -> T {
     return *reinterpret_cast<const T *>(&value_);
