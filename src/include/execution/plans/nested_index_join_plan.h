@@ -43,7 +43,6 @@ class NestedIndexJoinPlanNode : public AbstractPlanNode {
         index_name_(std::move(index_name)),
         index_table_name_(std::move(index_table_name)),
         inner_table_schema_(std::move(inner_table_schema)),
-        join_type_(join_type) {}
 
   auto GetType() const -> PlanType override { return PlanType::NestedIndexJoin; }
 

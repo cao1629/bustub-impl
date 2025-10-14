@@ -42,6 +42,7 @@ void BPLUSTREE_INDEX_TYPE::DeleteEntry(const Tuple &key, RID rid, Transaction *t
 }
 
 // Given a key, find the matching rids.
+// "key" is not the whole tuple. It is the key extracted from the tuple.
 // Store the matching rids in "result".
 // Since our b+ tree doesn't allow duplicate keys, we will just get none or one rid.
 INDEX_TEMPLATE_ARGUMENTS
