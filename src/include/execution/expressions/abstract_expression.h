@@ -78,6 +78,7 @@ class AbstractExpression {
   virtual auto ToString() const -> std::string { return "<unknown>"; }
 
   /** @return a new expression with new children */
+  // Copy constructor this plan and then move all children into the new created plan.
   virtual auto CloneWithChildren(std::vector<AbstractExpressionRef> children) const
       -> std::unique_ptr<AbstractExpression> = 0;
 

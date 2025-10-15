@@ -13,6 +13,7 @@
 #pragma once
 
 #include <memory>
+#include <queue>
 #include <vector>
 
 #include "execution/executor_context.h"
@@ -50,7 +51,44 @@ class TopNExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }
 
  private:
-  /** The topn plan node to be executed */
+  // Comparator for the priority queue
+  class TupleComparator {
+   public:
+    explicit TupleComparator(const TopNPlanNode *plan) : plan_(plan) {}
+
+    auto operator()(const Tuple &a, const Tuple &b) const -> bool {
+      for (const auto &[order_type, expr] : plan_->GetOrderBy()) {
+        Value val_a = expr->Evaluate(&a, plan_->OutputSchema());
+        Value val_b = expr->Evaluate(&b, plan_->OutputSchema());
+
+        if (val_a.CompareEquals(val_b) == CmpBool::CmpTrue) {
+          continue;
+        }
+
+        // For TopN, we use a max-heap for ASC (to keep smallest N elements)
+        // and a min-heap for DESC (to keep largest N elements)
+        bool ascending = (order_type == OrderByType::ASC || order_type == OrderByType::DEFAULT);
+
+        if (ascending) {
+          // Max-heap
+          return val_a.CompareLessThan(val_b) == CmpBool::CmpTrue;
+        } else {
+          // Min-heap
+          return val_a.CompareGreaterThan(val_b) == CmpBool::CmpTrue;
+        }
+      }
+      return false;
+    }
+
+   private:
+    const TopNPlanNode *plan_;
+  };
+
   const TopNPlanNode *plan_;
+
+  std::unique_ptr<AbstractExecutor> child_executor_;
+
+  std::priority_queue<Tuple, std::vector<Tuple>, TupleComparator> pq_;
+
 };
 }  // namespace bustub
