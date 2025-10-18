@@ -111,6 +111,7 @@ void TransactionManager::Abort(Transaction *txn) {
 
   // Release all the locks.
   ReleaseLocks(txn);
+
   // Release the global transaction latch.
   global_txn_latch_.RUnlock();
 }

@@ -61,6 +61,7 @@ class LockManager {
     bool granted_{false};
   };
 
+  // Queue of lock requests for the same resource (table or row)
   class LockRequestQueue {
    public:
     /** List of lock requests for the same resource (table or row) */
@@ -297,14 +298,116 @@ class LockManager {
    */
   auto RunCycleDetection() -> void;
 
+  static auto AreLocksCompatible(LockMode l1, LockMode l2) {
+    return LOCK_COMPATIBILITY_MATRIX[static_cast<int>(l1)][static_cast<int>(l2)];
+  }
+
+
+  // Valid upgrades:
+  // IS -> [S, X, IX, SIX]
+  // S -> [X, SIX]
+  // IX -> [X, SIX]
+  // SIX -> [X]
+  // Call this method only when I already know new_lock is different from old_lock.
+  static auto CheckUpgradeCompatible(LockMode old_lock, LockMode new_lock) -> bool {
+    switch (old_lock) {
+      case LockMode::INTENTION_SHARED:
+        // IS -> [S, X, IX, SIX]
+        if (new_lock == LockMode::SHARED || new_lock == LockMode::EXCLUSIVE ||
+            new_lock == LockMode::INTENTION_EXCLUSIVE || new_lock == LockMode::SHARED_INTENTION_EXCLUSIVE) {
+          return true;
+        }
+        return false;
+
+      case LockMode::SHARED:
+        // S -> [X, SIX]
+        if (new_lock == LockMode::EXCLUSIVE || new_lock == LockMode::SHARED_INTENTION_EXCLUSIVE) {
+          return true;
+        }
+        return false;
+
+      case LockMode::INTENTION_EXCLUSIVE:
+        // IX -> [X, SIX]
+        if (new_lock == LockMode::EXCLUSIVE || new_lock == LockMode::SHARED_INTENTION_EXCLUSIVE) {
+          return true;
+        }
+        return false;
+
+      case LockMode::SHARED_INTENTION_EXCLUSIVE:
+        // SIX -> [X]
+        if (new_lock == LockMode::EXCLUSIVE) {
+          return true;
+        }
+        return false;
+
+      case LockMode::EXCLUSIVE:
+        return false;
+
+      default:
+        return false;
+    }
+  }
+
+
+  // Check if a lock request is valid for an ongoing transaction
+  static auto CheckLockRequestValid(Transaction *txn, LockMode lock_mode) -> std::optional<AbortReason> {
+    auto isolation_level = txn->GetIsolationLevel();
+    auto txn_state = txn->GetState();
+
+    if (isolation_level == IsolationLevel::READ_UNCOMMITTED) {
+      // Read Uncommited: only X and IX are allowed
+      if (lock_mode == LockMode::SHARED ||
+          lock_mode == LockMode::INTENTION_SHARED ||
+          lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE) {
+        return AbortReason::LOCK_SHARED_ON_READ_UNCOMMITTED;
+      }
+    }
+
+    if (txn_state == TransactionState::SHRINKING) {
+      if (isolation_level == IsolationLevel::REPEATABLE_READ) {
+        // Repeatable Reads: no locks allowed in shrinking phase
+        return AbortReason::LOCK_ON_SHRINKING;
+      }
+
+      if (isolation_level == IsolationLevel::READ_COMMITTED) {
+        // Read Commited: only IS and S allowed in shrinking phase
+        if (lock_mode != LockMode::INTENTION_SHARED &&
+            lock_mode != LockMode::SHARED) {
+          return AbortReason::LOCK_ON_SHRINKING;
+        }
+      }
+    }
+
+    // Lock request is valid
+    return std::nullopt;
+  }
+
  private:
+  /**
+   * Helper function to check if a lock can be granted.
+   * @param request the lock request to check
+   * @param queue the lock request queue for the resource
+   * @return true if the lock can be granted, false otherwise
+   */
+  auto CanGrantLock(LockRequest *request, LockRequestQueue *queue) -> bool;
+
+  // s_table_lock_set
+  // x_table_lock_set
+  // is_table_lock_set
+  // ix_table_lock_set
+  // six_table_lock_set
+  void AddTableLockToTxn(Transaction *txn, LockMode lock_mode, const table_oid_t &oid);
+  void RemoveTableLockFromTxn(Transaction *txn, LockMode lock_mode, const table_oid_t &oid);
+
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
+  // Each table in this map has a queue of lock requests by different transactions
   std::unordered_map<table_oid_t, std::shared_ptr<LockRequestQueue>> table_lock_map_;
   /** Coordination */
   std::mutex table_lock_map_latch_;
 
   /** Structure that holds lock requests for a given RID */
+  // Each row in this map has a queue of lock requests by different transactions
   std::unordered_map<RID, std::shared_ptr<LockRequestQueue>> row_lock_map_;
   /** Coordination */
   std::mutex row_lock_map_latch_;
@@ -314,6 +417,17 @@ class LockManager {
   /** Waits-for graph representation. */
   std::unordered_map<txn_id_t, std::vector<txn_id_t>> waits_for_;
   std::mutex waits_for_latch_;
+
+  static constexpr bool LOCK_COMPATIBILITY_MATRIX[5][5] = {
+         // S     X    IS      IX   SIX
+      {true, false, true, false, false},    // S
+      {false, false, false, false, false},  // X
+      {true, false, true, true, false},     // IS
+      {false, false, true, true, false},    // IX
+      {false, false, false, false, false}   // SIX
+  };
+
+
 };
 
 }  // namespace bustub

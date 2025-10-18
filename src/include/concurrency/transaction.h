@@ -334,9 +334,12 @@ class Transaction {
   txn_id_t txn_id_;
 
   /** The undo set of table tuples. */
+  // INSERT, DELETE, UPDATE operations
   std::shared_ptr<std::deque<TableWriteRecord>> table_write_set_;
+
   /** The undo set of indexes. */
   std::shared_ptr<std::deque<IndexWriteRecord>> index_write_set_;
+
   /** The LSN of the last record written by the transaction. */
   lsn_t prev_lsn_;
 
@@ -344,6 +347,7 @@ class Transaction {
 
   /** Concurrent index: the pages that were latched during index operation. */
   std::shared_ptr<std::deque<Page *>> page_set_;
+
   /** Concurrent index: the page IDs that were deleted during index operation.*/
   std::shared_ptr<std::unordered_set<page_id_t>> deleted_page_set_;
 
