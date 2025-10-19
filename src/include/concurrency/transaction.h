@@ -21,8 +21,7 @@
 #include <unordered_set>
 
 #include "common/config.h"
-#include "common/logger.h"
-#include "lock_manager.h"
+#include "concurrency/lock_manager.h"
 #include "storage/page/page.h"
 #include "storage/table/tuple.h"
 

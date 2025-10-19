@@ -11,7 +11,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "concurrency/transaction.h"
-
 #include <atomic>
 #include <cstdio>
 #include <memory>

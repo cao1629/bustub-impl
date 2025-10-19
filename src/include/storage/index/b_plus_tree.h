@@ -21,6 +21,8 @@
 
 namespace bustub {
 
+class Transaction;
+
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
 
 /**

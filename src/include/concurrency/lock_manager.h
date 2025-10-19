@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "catalog/catalog.h"
 #include "common/config.h"
 #include "common/rid.h"
 #include "concurrency/transaction.h"
@@ -220,6 +221,7 @@ class LockManager {
    */
   auto LockTable(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) noexcept(false) -> bool;
 
+
   /**
    * Release the lock held on a table by the transaction.
    *
@@ -298,7 +300,7 @@ class LockManager {
    */
   auto RunCycleDetection() -> void;
 
-  static auto AreLocksCompatible(LockMode l1, LockMode l2) {
+  static auto CheckLocksCompatible(LockMode l1, LockMode l2) {
     return LOCK_COMPATIBILITY_MATRIX[static_cast<int>(l1)][static_cast<int>(l2)];
   }
 
@@ -322,7 +324,6 @@ class LockManager {
    * @return true if the lock can be granted, false otherwise
    */
   auto CanGrantLock(LockRequest *request, LockRequestQueue *queue) -> bool;
-
 
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
@@ -351,7 +352,6 @@ class LockManager {
       {false, false, true, true, false},    // IX
       {false, false, false, false, false}   // SIX
   };
-
 
 };
 
