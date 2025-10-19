@@ -22,6 +22,7 @@
 
 #include "common/config.h"
 #include "common/logger.h"
+#include "lock_manager.h"
 #include "storage/page/page.h"
 #include "storage/table/tuple.h"
 
@@ -322,6 +323,112 @@ class Transaction {
    * @param prev_lsn new previous lsn
    */
   inline void SetPrevLSN(lsn_t prev_lsn) { prev_lsn_ = prev_lsn; }
+
+  void AddTableLock(LockManager::LockMode lock_mode, table_oid_t oid) {
+    switch (lock_mode) {
+      case LockManager::LockMode::SHARED:
+        GetSharedTableLockSet()->insert(oid);
+        break;
+      case LockManager::LockMode::EXCLUSIVE:
+        GetExclusiveTableLockSet()->insert(oid);
+        break;
+      case LockManager::LockMode::INTENTION_SHARED:
+        GetIntentionSharedTableLockSet()->insert(oid);
+        break;
+      case LockManager::LockMode::INTENTION_EXCLUSIVE:
+        GetIntentionExclusiveTableLockSet()->insert(oid);
+        break;
+      case LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE:
+        GetSharedIntentionExclusiveTableLockSet()->insert(oid);
+        break;
+    }
+  }
+
+  void RemoveTableLock(LockManager::LockMode lock_mode, table_oid_t oid) {
+    switch (lock_mode) {
+      case LockManager::LockMode::SHARED:
+        GetSharedTableLockSet()->erase(oid);
+        break;
+      case LockManager::LockMode::EXCLUSIVE:
+        GetExclusiveTableLockSet()->erase(oid);
+        break;
+      case LockManager::LockMode::INTENTION_SHARED:
+        GetIntentionSharedTableLockSet()->erase(oid);
+        break;
+      case LockManager::LockMode::INTENTION_EXCLUSIVE:
+        GetIntentionExclusiveTableLockSet()->erase(oid);
+        break;
+      case LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE:
+        GetSharedIntentionExclusiveTableLockSet()->erase(oid);
+        break;
+    }
+  }
+
+  void AddRowLock(LockManager::LockMode lock_mode, table_oid_t oid, const RID &rid) {
+    switch (lock_mode) {
+      case LockManager::LockMode::SHARED:
+        if (GetSharedRowLockSet()->find(oid) == GetSharedRowLockSet()->end()) {
+          // std::pair
+          GetSharedRowLockSet()->emplace(oid, std::unordered_set<RID>{});
+        }
+        GetSharedRowLockSet()->at(oid).insert(rid);
+        break;
+      case LockManager::LockMode::EXCLUSIVE:
+        if (GetExclusiveRowLockSet()->find(oid) == GetExclusiveRowLockSet()->end()) {
+          GetExclusiveRowLockSet()->emplace(oid, std::unordered_set<RID>{});
+        }
+        GetExclusiveRowLockSet()->at(oid).insert(rid);
+      default:
+        break;
+    }
+  }
+
+  void RemoveRowLock(LockManager::LockMode lock_mode, table_oid_t oid, const RID &rid) {
+    switch (lock_mode) {
+      case LockManager::LockMode::SHARED:
+        GetSharedRowLockSet()->erase(oid);
+        break;
+      case LockManager::LockMode::EXCLUSIVE:
+        GetExclusiveRowLockSet()->erase(oid);
+        break;
+      default:
+        break;
+    }
+  }
+
+  auto FindTableLock(table_oid_t oid) -> std::optional<LockManager::LockMode> {
+    if (GetSharedTableLockSet()->find(oid) != GetSharedTableLockSet()->end()) {
+      return LockManager::LockMode::SHARED;
+    }
+    if (GetExclusiveTableLockSet()->find(oid) != GetSharedTableLockSet()->end()) {
+      return LockManager::LockMode::EXCLUSIVE;
+    }
+    if (GetIntentionExclusiveTableLockSet()->find(oid) != GetIntentionSharedTableLockSet()->end()) {
+      return LockManager::LockMode::INTENTION_EXCLUSIVE;
+    }
+    if (GetIntentionSharedTableLockSet()->find(oid) != GetIntentionSharedTableLockSet()->end()) {
+      return LockManager::LockMode::INTENTION_SHARED;
+    }
+    if (GetSharedIntentionExclusiveTableLockSet()->find(oid) != GetIntentionExclusiveTableLockSet()->end()) {
+      return LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE;
+    }
+    return std::nullopt;
+  }
+
+  auto FindRowLock(table_oid_t oid, const RID &rid) -> std::optional<LockManager::LockMode> {
+    if (GetSharedRowLockSet()->find(oid) != GetSharedRowLockSet()->end()) {
+      if (GetSharedRowLockSet()->at(oid).find(rid) != GetSharedRowLockSet()->at(oid).end()) {
+        return LockManager::LockMode::SHARED;
+      }
+    }
+
+    if (GetExclusiveRowLockSet()->find(oid) != GetExclusiveRowLockSet()->end()) {
+      if (GetExclusiveRowLockSet()->at(oid).find(rid) != GetExclusiveRowLockSet()->at(oid).end()) {
+        return LockManager::LockMode::EXCLUSIVE;
+      }
+    }
+    return std::nullopt;
+  }
 
  private:
   /** The current transaction state. */

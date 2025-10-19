@@ -309,78 +309,10 @@ class LockManager {
   // IX -> [X, SIX]
   // SIX -> [X]
   // Call this method only when I already know new_lock is different from old_lock.
-  static auto CheckUpgradeCompatible(LockMode old_lock, LockMode new_lock) -> bool {
-    switch (old_lock) {
-      case LockMode::INTENTION_SHARED:
-        // IS -> [S, X, IX, SIX]
-        if (new_lock == LockMode::SHARED || new_lock == LockMode::EXCLUSIVE ||
-            new_lock == LockMode::INTENTION_EXCLUSIVE || new_lock == LockMode::SHARED_INTENTION_EXCLUSIVE) {
-          return true;
-        }
-        return false;
-
-      case LockMode::SHARED:
-        // S -> [X, SIX]
-        if (new_lock == LockMode::EXCLUSIVE || new_lock == LockMode::SHARED_INTENTION_EXCLUSIVE) {
-          return true;
-        }
-        return false;
-
-      case LockMode::INTENTION_EXCLUSIVE:
-        // IX -> [X, SIX]
-        if (new_lock == LockMode::EXCLUSIVE || new_lock == LockMode::SHARED_INTENTION_EXCLUSIVE) {
-          return true;
-        }
-        return false;
-
-      case LockMode::SHARED_INTENTION_EXCLUSIVE:
-        // SIX -> [X]
-        if (new_lock == LockMode::EXCLUSIVE) {
-          return true;
-        }
-        return false;
-
-      case LockMode::EXCLUSIVE:
-        return false;
-
-      default:
-        return false;
-    }
-  }
-
+  static auto CheckUpgradeCompatible(LockMode old_lock, LockMode new_lock) -> bool;
 
   // Check if a lock request is valid for an ongoing transaction
-  static auto CheckLockRequestValid(Transaction *txn, LockMode lock_mode) -> std::optional<AbortReason> {
-    auto isolation_level = txn->GetIsolationLevel();
-    auto txn_state = txn->GetState();
-
-    if (isolation_level == IsolationLevel::READ_UNCOMMITTED) {
-      // Read Uncommited: only X and IX are allowed
-      if (lock_mode == LockMode::SHARED ||
-          lock_mode == LockMode::INTENTION_SHARED ||
-          lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE) {
-        return AbortReason::LOCK_SHARED_ON_READ_UNCOMMITTED;
-      }
-    }
-
-    if (txn_state == TransactionState::SHRINKING) {
-      if (isolation_level == IsolationLevel::REPEATABLE_READ) {
-        // Repeatable Reads: no locks allowed in shrinking phase
-        return AbortReason::LOCK_ON_SHRINKING;
-      }
-
-      if (isolation_level == IsolationLevel::READ_COMMITTED) {
-        // Read Commited: only IS and S allowed in shrinking phase
-        if (lock_mode != LockMode::INTENTION_SHARED &&
-            lock_mode != LockMode::SHARED) {
-          return AbortReason::LOCK_ON_SHRINKING;
-        }
-      }
-    }
-
-    // Lock request is valid
-    return std::nullopt;
-  }
+  static auto CheckLockRequestValid(Transaction *txn, LockMode lock_mode) -> std::optional<AbortReason>;
 
  private:
   /**
@@ -391,13 +323,6 @@ class LockManager {
    */
   auto CanGrantLock(LockRequest *request, LockRequestQueue *queue) -> bool;
 
-  // s_table_lock_set
-  // x_table_lock_set
-  // is_table_lock_set
-  // ix_table_lock_set
-  // six_table_lock_set
-  void AddTableLockToTxn(Transaction *txn, LockMode lock_mode, const table_oid_t &oid);
-  void RemoveTableLockFromTxn(Transaction *txn, LockMode lock_mode, const table_oid_t &oid);
 
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
