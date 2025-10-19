@@ -325,7 +325,7 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
       lock_request_queue->cv_.wait(lock);
     }
     // Granted the lock
-    txn->AddRowLock(lock_mode, oid, rid, lock_request);
+    txn->AddRowLock(lock_mode, oid, rid);
     return true;
   }
 

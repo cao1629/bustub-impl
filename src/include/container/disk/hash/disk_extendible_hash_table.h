@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "buffer/buffer_pool_manager.h"
-#include "concurrency/transaction.h"
+// #include "concurrency/transaction.h"
 #include "container/hash/hash_function.h"
 #include "storage/page/hash_table_bucket_page.h"
 #include "storage/page/hash_table_directory_page.h"
@@ -25,6 +25,9 @@
 namespace bustub {
 
 #define HASH_TABLE_TYPE DiskExtendibleHashTable<KeyType, ValueType, KeyComparator>
+
+
+class Transaction;
 
 /**
  * Implementation of extendible hash table that is backed by a buffer pool

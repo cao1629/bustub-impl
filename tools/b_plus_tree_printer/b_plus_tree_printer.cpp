@@ -17,6 +17,7 @@
 #include "common/logger.h"
 #include "storage/index/b_plus_tree.h"
 #include "test_util.h"  // NOLINT
+#include "concurrency//transaction.h"
 
 using bustub::BPlusTree;
 using bustub::BufferPoolManager;

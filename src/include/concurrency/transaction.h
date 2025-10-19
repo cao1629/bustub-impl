@@ -22,10 +22,12 @@
 
 #include "common/config.h"
 #include "concurrency/lock_manager.h"
+#include "concurrency/transaction_types.h"
 #include "storage/page/page.h"
 #include "storage/table/tuple.h"
 
 namespace bustub {
+
 
 /**
  * Transaction states for 2PL:
@@ -98,20 +100,6 @@ class IndexWriteRecord {
   index_oid_t index_oid_;
   /** The catalog contains metadata required to locate index. */
   Catalog *catalog_;
-};
-
-/**
- * Reason to a transaction abortion
- */
-enum class AbortReason {
-  LOCK_ON_SHRINKING,
-  UPGRADE_CONFLICT,
-  LOCK_SHARED_ON_READ_UNCOMMITTED,
-  TABLE_LOCK_NOT_PRESENT,
-  ATTEMPTED_INTENTION_LOCK_ON_ROW,
-  TABLE_UNLOCKED_BEFORE_UNLOCKING_ROWS,
-  INCOMPATIBLE_UPGRADE,
-  ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD
 };
 
 /**

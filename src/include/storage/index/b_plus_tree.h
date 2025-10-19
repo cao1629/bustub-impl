@@ -14,7 +14,6 @@
 #include <string>
 #include <vector>
 
-#include "concurrency/transaction.h"
 #include "storage/index/index_iterator.h"
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"

@@ -19,6 +19,7 @@
 #include "recovery/log_manager.h"
 #include "storage/page/page.h"
 #include "storage/table/tuple.h"
+#include "concurrency/transaction.h"
 
 // 1000 0000 0000 0000 0000 0000 0000 0000
 static constexpr uint64_t DELETE_MASK = (1U << (8 * sizeof(uint32_t) - 1));

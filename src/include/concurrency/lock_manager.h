@@ -21,15 +21,20 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#include "catalog/catalog.h"
+// #include "catalog/catalog.h"
 #include "common/config.h"
 #include "common/rid.h"
-#include "concurrency/transaction.h"
+#include "concurrency/transaction_types.h"
+#include <thread>
 
 namespace bustub {
 
 class TransactionManager;
+class Transaction;
+class CataLog;
+
+using table_oid_t = uint32_t;
+using index_oid_t = uint32_t;
 
 /**
  * LockManager handles transactions asking for locks on records.

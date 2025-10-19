@@ -22,6 +22,7 @@
 #include "execution/executor_factory.h"
 #include "execution/plans/abstract_plan.h"
 #include "storage/table/tuple.h"
+#include "common/logger.h"
 
 namespace bustub {
 
