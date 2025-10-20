@@ -29,9 +29,10 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     if (table_iter_ == table_info_->table_->End()) {
       return false;
     }
-    *tuple = *table_iter_++;
+    *tuple = *table_iter_;
+    ++table_iter_;
     *rid = tuple->GetRid();
-  } while (plan_->filter_predicate_ == nullptr ||
+  } while (plan_->filter_predicate_ != nullptr &&
     !plan_->filter_predicate_->Evaluate(tuple, table_info_->schema_).GetAs<bool>());
 
   return true;

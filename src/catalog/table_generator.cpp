@@ -159,10 +159,10 @@ void TableGenerator::GenerateTestTables() {
        {{"colA", TypeId::BIGINT, false, Dist::Serial, 0, 0}, {"colB", TypeId::INTEGER, true, Dist::Serial, 0, 0}}},
 
       // Empty table with two columns
-      {"empty_table2",
-       0,
-       {{"colA", TypeId::INTEGER, false, Dist::Serial, 0, 0}, {"colB", TypeId::INTEGER, false, Dist::Uniform, 0,
-       9}}},
+      // {"empty_table2",
+      //  0,
+      //  {{"colA", TypeId::INTEGER, false, Dist::Serial, 0, 0}, {"colB", TypeId::INTEGER, false, Dist::Uniform, 0,
+      //  9}}},
 
       // Empty table with two columns
       {"empty_table3",

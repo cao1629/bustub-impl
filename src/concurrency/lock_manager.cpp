@@ -132,6 +132,7 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
     // Lock granted
     new_request->granted_ = true;
     txn->AddTableLock(lock_mode, oid);
+    txn->SetState(TransactionState::GROWING);
     return true;
   }
 
@@ -160,7 +161,6 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   // Step 2: Remove the existing lock request from the queue.
   txn->RemoveTableLock(existing_request->lock_mode_, oid);
   lock_request_queue->request_queue_.remove(existing_request);
-  delete existing_request;
 
   // Step 3: Remove the lock from transaction's lock set.
   // The lock must be in the transaction's lock set, because when a transaction tries to upgrade
@@ -407,7 +407,27 @@ auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID 
   // Step 3: Remove the lock from the transaction's lock set
   txn->RemoveRowLock(lock_mode.value(), oid, rid);
 
-  // Step 4: notify waiting transactions
+
+  // Step 4: GROWING -> SHRINKING
+  if (txn->GetState() != TransactionState::ABORTED) {
+    if (lock_mode == LockMode::SHARED || lock_mode == LockMode::EXCLUSIVE) {
+      if (txn->GetIsolationLevel() == IsolationLevel::REPEATABLE_READ) {
+        if (txn->GetState() == TransactionState::GROWING) {
+          txn->SetState(TransactionState::SHRINKING);
+        }
+      } else if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
+        if (lock_mode == LockMode::EXCLUSIVE && txn->GetState() == TransactionState::GROWING) {
+          txn->SetState(TransactionState::SHRINKING);
+        }
+      } else if (txn->GetIsolationLevel() == IsolationLevel::READ_UNCOMMITTED) {
+        if (lock_mode == LockMode::EXCLUSIVE && txn->GetState() == TransactionState::GROWING) {
+          txn->SetState(TransactionState::SHRINKING);
+        }
+      }
+    }
+  }
+
+  // Step 5: notify waiting transactions
   lock_request_queue->cv_.notify_all();
   return true;
 }
