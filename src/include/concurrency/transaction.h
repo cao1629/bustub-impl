@@ -311,7 +311,7 @@ class Transaction {
    */
   inline void SetPrevLSN(lsn_t prev_lsn) { prev_lsn_ = prev_lsn; }
 
-  void AddTableLock(LockManager::LockMode lock_mode, table_oid_t oid) {
+  void AddTableLockToSet(LockManager::LockMode lock_mode, table_oid_t oid) {
     switch (lock_mode) {
       case LockManager::LockMode::SHARED:
         GetSharedTableLockSet()->insert(oid);
@@ -331,7 +331,7 @@ class Transaction {
     }
   }
 
-  void RemoveTableLock(LockManager::LockMode lock_mode, table_oid_t oid) {
+  void RemoveTableLockFromSet(LockManager::LockMode lock_mode, table_oid_t oid) {
     switch (lock_mode) {
       case LockManager::LockMode::SHARED:
         GetSharedTableLockSet()->erase(oid);
@@ -351,7 +351,7 @@ class Transaction {
     }
   }
 
-  void AddRowLock(LockManager::LockMode lock_mode, table_oid_t oid, const RID &rid) {
+  void AddRowLockToSet(LockManager::LockMode lock_mode, table_oid_t oid, const RID &rid) {
     switch (lock_mode) {
       case LockManager::LockMode::SHARED:
         if (GetSharedRowLockSet()->find(oid) == GetSharedRowLockSet()->end()) {
@@ -370,7 +370,7 @@ class Transaction {
     }
   }
 
-  void RemoveRowLock(LockManager::LockMode lock_mode, table_oid_t oid, const RID &rid) {
+  void RemoveRowLockFromSet(LockManager::LockMode lock_mode, table_oid_t oid, const RID &rid) {
     switch (lock_mode) {
       case LockManager::LockMode::SHARED:
         GetSharedRowLockSet()->erase(oid);

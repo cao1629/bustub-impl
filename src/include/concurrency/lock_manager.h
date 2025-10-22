@@ -71,7 +71,7 @@ class LockManager {
   class LockRequestQueue {
    public:
     /** List of lock requests for the same resource (table or row) */
-    std::list<LockRequest *> request_queue_;
+    std::list<LockRequest*> request_queue_;
     /** For notifying blocked transactions on this rid */
     std::condition_variable cv_;
     /** txn_id of an upgrading transaction (if any) */
@@ -272,6 +272,10 @@ class LockManager {
    */
   auto UnlockRow(Transaction *txn, const table_oid_t &oid, const RID &rid) -> bool;
 
+  auto FindTxnTableLockRequest(Transaction *txn, table_oid_t oid) -> LockRequest*;
+
+  auto FindTxnRowLockRequest(Transaction *txn, const RID &rid) -> LockRequest*;
+
   /*** Graph API ***/
 
   /**
@@ -305,7 +309,7 @@ class LockManager {
    */
   auto RunCycleDetection() -> void;
 
-  static auto CheckLocksCompatible(LockMode l1, LockMode l2) {
+  static auto CheckTwoLocksCompatible(LockMode l1, LockMode l2) {
     return LOCK_COMPATIBILITY_MATRIX[static_cast<int>(l1)][static_cast<int>(l2)];
   }
 
@@ -316,19 +320,14 @@ class LockManager {
   // IX -> [X, SIX]
   // SIX -> [X]
   // Call this method only when I already know new_lock is different from old_lock.
-  static auto CheckUpgradeCompatible(LockMode old_lock, LockMode new_lock) -> bool;
+  static auto CheckUpgradeValid(LockMode old_lock, LockMode new_lock) -> bool;
 
   // Check if a lock request is valid for an ongoing transaction
   static auto CheckLockRequestValid(Transaction *txn, LockMode lock_mode) -> std::optional<AbortReason>;
 
  private:
-  /**
-   * Helper function to check if a lock can be granted.
-   * @param request the lock request to check
-   * @param queue the lock request queue for the resource
-   * @return true if the lock can be granted, false otherwise
-   */
-  auto CanGrantLock(LockRequest *request, LockRequestQueue *queue) -> bool;
+
+  auto GrantLock(LockRequest *request, LockRequestQueue *queue) -> bool;
 
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
@@ -358,6 +357,15 @@ class LockManager {
       {false, false, false, false, false}   // SIX
   };
 
+  void BuildWaitsForGraph();
+
+  void dfs(txn_id_t vertex);
+
+  std::unordered_set<txn_id_t> visited_;
+  std::unordered_set<txn_id_t> gray_set_;
+  std::unordered_set<txn_id_t> path_;
+  bool found_cycle_;
+  std::unordered_set<txn_id_t> txn_set_;
 };
 
 }  // namespace bustub

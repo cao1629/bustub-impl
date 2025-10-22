@@ -90,8 +90,9 @@ class TransactionManager {
    * Releases all the locks held by the given transaction.
    * @param txn the transaction whose locks should be released
    */
+  // Gather held locks from transaction's lock set, and then release them via lock manager.
   void ReleaseLocks(Transaction *txn) {
-    /** Drop all row locks */
+    // Gather all shared locks and exclusive locks together.
     txn->LockTxn();
     std::unordered_map<table_oid_t, std::unordered_set<RID>> row_lock_set;
     for (const auto &s_row_lock_set : *txn->GetSharedRowLockSet()) {
@@ -105,7 +106,7 @@ class TransactionManager {
       }
     }
 
-    /** Drop all table locks */
+    // Gather all kinds of table locks together.
     std::unordered_set<table_oid_t> table_lock_set;
     for (auto oid : *txn->GetSharedTableLockSet()) {
       table_lock_set.emplace(oid);
@@ -124,6 +125,7 @@ class TransactionManager {
     }
     txn->UnlockTxn();
 
+    // Remove all row locks held by this transaction.
     for (const auto &locked_table_row_set : row_lock_set) {
       table_oid_t oid = locked_table_row_set.first;
       for (auto rid : locked_table_row_set.second) {
@@ -131,6 +133,7 @@ class TransactionManager {
       }
     }
 
+    // Remove all table locks held by this transaction.
     for (auto oid : table_lock_set) {
       lock_manager_->UnlockTable(txn, oid);
     }

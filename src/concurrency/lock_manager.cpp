@@ -18,7 +18,7 @@
 
 namespace bustub {
 
-auto LockManager::CheckUpgradeCompatible(LockMode old_lock, LockMode new_lock) -> bool {
+auto LockManager::CheckUpgradeValid(LockMode old_lock, LockMode new_lock) -> bool {
   switch (old_lock) {
     case LockMode::INTENTION_SHARED:
       // IS -> [S, X, IX, SIX]
@@ -87,8 +87,11 @@ auto LockManager::CheckLockRequestValid(Transaction *txn, LockMode lock_mode) ->
   return std::nullopt;
 }
 
+
 auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> bool {
-  // Check if transaction is already aborted
+  // std::cout << txn->GetTransactionId() << "LockTable" << std::endl;
+  // Check if transaction is already aborted.
+  // How come this transaction is aborted? Aborted by cycle detection.
   if (txn->GetState() == TransactionState::ABORTED) {
     return false;
   }
@@ -105,103 +108,123 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   if (table_lock_map_.find(oid) == table_lock_map_.end()) {
     table_lock_map_[oid] = std::make_shared<LockRequestQueue>();
   }
-  auto lock_request_queue = table_lock_map_[oid];
-  std::unique_lock<std::mutex> lock(lock_request_queue->latch_);
+  auto table_lock_request_queue = table_lock_map_[oid];
+  std::unique_lock<std::mutex> lock(table_lock_request_queue->latch_);
   table_lock_map_latch_.unlock();
 
-  // Is there an existing lock request from this transaction?
-  LockRequest *existing_request = nullptr;
-  for (auto *request : lock_request_queue->request_queue_) {
+  // check if there is already a lock request for the same table.
+  LockRequest *table_lock_request = nullptr;
+  for (auto request : table_lock_request_queue->request_queue_) {
     if (request->txn_id_ == txn->GetTransactionId()) {
-      existing_request = request;
+      table_lock_request = request;
       break;
     }
   }
 
-  // No existing lock request from this transaction.
-  // We create a new lock request and append it to the queue.
-  if (existing_request == nullptr) {
-    LockRequest *new_request = new LockRequest(txn->GetTransactionId(), lock_mode, oid);
-    lock_request_queue->request_queue_.push_back(new_request);
+  // no existing lock request from this transaction on this table.
+  // We create a new one.
+  if (table_lock_request == nullptr) {
+    table_lock_request = new LockRequest(txn->GetTransactionId(), lock_mode, oid);
+    table_lock_request_queue->request_queue_.push_back(table_lock_request);
+    // wait to be granted
+    while (!GrantLock(table_lock_request, table_lock_request_queue.get())) {
+      table_lock_request_queue->cv_.wait(lock);
 
-    // Wait for lock to be granted
-    while (!CanGrantLock(new_request, lock_request_queue.get())) {
-      lock_request_queue->cv_.wait(lock);
+      if (txn->GetState() == TransactionState::ABORTED) {
+        // transaction is aborted in the meantime
+        table_lock_request_queue->request_queue_.remove(table_lock_request);
+        table_lock_request_queue->cv_.notify_all();
+        return false;
+      }
     }
-
-    // Lock granted
-    new_request->granted_ = true;
-    txn->AddTableLock(lock_mode, oid);
-    txn->SetState(TransactionState::GROWING);
+    // lock is granted
+    table_lock_request->granted_ = true;
+    txn->AddTableLockToSet(lock_mode, oid);
     return true;
   }
 
-  // An existing lock request from this transaction.
-  // See if we need to upgrade it.
-  if (existing_request->lock_mode_ == lock_mode) {
+  // The existing lock request for the same table has the same lock mode, we just
+  // ignore the newer request.
+  if (table_lock_request->lock_mode_ == lock_mode) {
     return true;
   }
 
-  // Check upgrade compatability
-  if (lock_request_queue->upgrading_ != INVALID_TXN_ID) {
+  // If the existing lock request for the same table has a different lock mode,
+  // we try to upgrade it.
+
+  // (1) We cannot upgrade a lock request if another transaction is upgrading its lock request
+  // on this table.
+  if (table_lock_request_queue->upgrading_ != INVALID_TXN_ID) {
     txn->SetState(TransactionState::ABORTED);
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::UPGRADE_CONFLICT);
   }
 
-  auto can_upgrade = CheckUpgradeCompatible(existing_request->lock_mode_, lock_mode);
-  if (!can_upgrade) {
+  // (2) check upgrade compatibility
+  auto compatible = CheckUpgradeValid(table_lock_request->lock_mode_, lock_mode);
+  if (!compatible) {
     txn->SetState(TransactionState::ABORTED);
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::UPGRADE_CONFLICT);
   }
 
-  // Now we know we need to upgrade the existing lock request.
-  // Step 1: Mark as upgrading
-  lock_request_queue->upgrading_ = txn->GetTransactionId();
-
-  // Step 2: Remove the existing lock request from the queue.
-  txn->RemoveTableLock(existing_request->lock_mode_, oid);
-  lock_request_queue->request_queue_.remove(existing_request);
-
-  // Step 3: Remove the lock from transaction's lock set.
-  // The lock must be in the transaction's lock set, because when a transaction tries to upgrade
-  // an existing lock, it must have held the existing lock.
-  txn->RemoveTableLock(existing_request->lock_mode_, oid);
-
-  // Step 4: Create a new lock request and insert it before the first waiting request.
-  auto upgrade_request = new LockRequest(txn->GetTransactionId(), lock_mode, oid);
-  auto it = lock_request_queue->request_queue_.begin();
-  while (it != lock_request_queue->request_queue_.end() && (*it)->granted_) {
+  // (3) upgrade it
+  // (3.a) mark as upgrading
+  table_lock_request_queue->upgrading_ = txn->GetTransactionId();
+  // (3.b) Remove the exiting lock request from the queue and transaction's lock set.
+  table_lock_request_queue->request_queue_.remove(table_lock_request);
+  txn->RemoveTableLockFromSet(table_lock_request->lock_mode_, oid);
+  // (3.c) Create a new lock request and insert it before the first waiting request.
+  auto upgrade_table_lock_request = new LockRequest(txn->GetTransactionId(), lock_mode, oid);
+  auto it = table_lock_request_queue->request_queue_.begin();
+  while (it != table_lock_request_queue->request_queue_.end() && (*it)->granted_) {
     ++it;
   }
-  lock_request_queue->request_queue_.insert(it, upgrade_request);
-
-  // Step 5: Wait for be granted
-  while (!CanGrantLock(upgrade_request, lock_request_queue.get())) {
-    lock_request_queue->cv_.wait(lock);
-
+  table_lock_request_queue->request_queue_.insert(it, upgrade_table_lock_request);
+  // (3.d) Wait to be granted
+  while (!GrantLock(upgrade_table_lock_request, table_lock_request_queue.get())) {
+    table_lock_request_queue->cv_.wait(lock);
+    if (txn->GetState() == TransactionState::ABORTED) {
+      // transaction is aborted in the meantime
+      table_lock_request_queue->upgrading_ = INVALID_TXN_ID;
+      table_lock_request_queue->request_queue_.remove(upgrade_table_lock_request);
+      table_lock_request_queue->cv_.notify_all();
+      return false;
+    }
   }
-
-  // Step 6: Upgrade is complete. Finish up.
-  upgrade_request->granted_ = true;
-  lock_request_queue->upgrading_ = INVALID_TXN_ID;
-  txn->AddTableLock(lock_mode, oid);
-
+  // (3.e) The lock is granted.
+  upgrade_table_lock_request->granted_ = true;
+  table_lock_request_queue->upgrading_ = INVALID_TXN_ID;
+  txn->AddTableLockToSet(lock_mode, oid);
   return true;
 }
 
 auto LockManager::UnlockTable(Transaction *txn, const table_oid_t &oid) -> bool {
-  // Find which lock mode the transaction holds on this table
-  auto lock_mode = txn->FindTableLock(oid);
+  // std::cout << txn->GetTransactionId() << " UnlockTable" << std::endl;
+  // Step 1: Check if the transaction is trying to unlock a lock that is not in any lock request.
+  table_lock_map_latch_.lock();
 
-  // If no lock held, abort. We cannot unlock a lock that is not held.
-  if (!lock_mode.has_value()) {
+  if (table_lock_map_.find(oid) == table_lock_map_.cend()) {
     txn->SetState(TransactionState::ABORTED);
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
   }
 
-  // Check if transaction holds any row locks on this table.
-  // We cannot unlock table locks if there are row locks held.
-  // Must unlock all row locks before unlocking table locks
+  auto table_lock_request_queue = table_lock_map_[oid];
+  std::unique_lock<std::mutex> lock(table_lock_request_queue->latch_);
+  table_lock_map_latch_.unlock();
+
+  LockRequest *table_lock_request = nullptr;
+  for (auto request : table_lock_request_queue->request_queue_) {
+    if (request->txn_id_ == txn->GetTransactionId()) {
+      table_lock_request = request;
+      break;
+    }
+  }
+
+  if (table_lock_request == nullptr) {
+    txn->SetState(TransactionState::ABORTED);
+    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
+  }
+
+  // Step 2: Check if the transactions holds any row locks on this table.
   auto s_row_lock_set = txn->GetSharedRowLockSet();
   auto x_row_lock_set = txn->GetExclusiveRowLockSet();
 
@@ -218,43 +241,12 @@ auto LockManager::UnlockTable(Transaction *txn, const table_oid_t &oid) -> bool 
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::TABLE_UNLOCKED_BEFORE_UNLOCKING_ROWS);
   }
 
-  table_lock_map_latch_.lock();
-  // We try to find the lock request queue for this table.
-  // If this does not exist, which seems impossible, we abort.
-  if (table_lock_map_.find(oid) == table_lock_map_.end()) {
-    table_lock_map_latch_.unlock();
-    txn->SetState(TransactionState::ABORTED);
-    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
-  }
+  // Step 3: Remove from lock request queue and transaction's lock set.
+  table_lock_request_queue->request_queue_.remove(table_lock_request);
+  auto lock_mode = table_lock_request->lock_mode_;
+  txn->RemoveTableLockFromSet(lock_mode, oid);
 
-  auto lock_request_queue = table_lock_map_[oid];
-  std::unique_lock<std::mutex> lock(lock_request_queue->latch_);
-  table_lock_map_latch_.unlock();
-
-  LockRequest *existing_request = nullptr;
-  for (auto request : lock_request_queue->request_queue_) {
-    if (request->txn_id_ == txn->GetTransactionId() && request->granted_) {
-      existing_request = request;
-      break;
-    }
-  }
-
-  // This transaction has never issued a lock request on this table.
-  // Or this lock has already been released.
-  if (existing_request == nullptr) {
-    txn->SetState(TransactionState::ABORTED);
-    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
-  }
-
-  // Now we unlock this table.
-  // Step 1: Remove from lock request queue.
-  lock_request_queue->request_queue_.remove(existing_request);
-  delete existing_request;
-
-  // Step 2: Remove from transaction's lock sets
-  txn->RemoveTableLock(lock_mode.value(), oid);
-
-  // Step 3: Update transaction state based on lock mode and isolation level
+  // Step 4: Update transaction state based on lock mode and isolation level
   if (txn->GetState() != TransactionState::ABORTED) {
     if (lock_mode == LockMode::SHARED || lock_mode == LockMode::EXCLUSIVE) {
       if (txn->GetIsolationLevel() == IsolationLevel::REPEATABLE_READ) {
@@ -274,12 +266,13 @@ auto LockManager::UnlockTable(Transaction *txn, const table_oid_t &oid) -> bool 
   }
 
   // Step 4: Notify other waiting transactions.
-  lock_request_queue->cv_.notify_all();
-
+  table_lock_request_queue->cv_.notify_all();
+  table_lock_map_latch_.unlock();
   return true;
 }
 
 auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid) -> bool {
+  std::cout << txn->GetTransactionId() << " LockRow " << rid.GetSlotNum() << std::endl;
   // Check lock compatability
   auto abort_reason = CheckLockRequestValid(txn, lock_mode);
   if (abort_reason.has_value()) {
@@ -295,37 +288,39 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
   }
 
   row_lock_map_latch_.lock();
-
-  // Get the lock request queue for this row. If it does not exist, create one.
   if (row_lock_map_.find(rid) == row_lock_map_.end()) {
     row_lock_map_[rid] = std::make_shared<LockRequestQueue>();
   }
 
-  auto lock_request_queue = row_lock_map_[rid];
-
-  // Acquire a finer lock and then release a coarser lock to make sure
-  // the execution is not interrupted here.
-  std::unique_lock<std::mutex> lock(lock_request_queue->latch_);
+  auto row_lock_request_queue = row_lock_map_[rid];
+  std::unique_lock<std::mutex> lock(row_lock_request_queue->latch_);
   row_lock_map_latch_.unlock();
 
-  LockRequest *lock_request = nullptr;
-  for (auto *request : lock_request_queue->request_queue_) {
+  LockRequest *row_lock_request = nullptr;
+  for (auto *request : row_lock_request_queue->request_queue_) {
     if (request->txn_id_ == txn->GetTransactionId()) {
-      lock_request = request;
+      row_lock_request = request;
       break;
     }
   }
 
   // no existing lock request on this row from this transaction.
-  if (lock_request == nullptr) {
-    LockRequest *new_request = new LockRequest(txn->GetTransactionId(), lock_mode, oid, rid);
-    lock_request_queue->request_queue_.push_back(new_request);
+  if (row_lock_request == nullptr) {
+    row_lock_request = new LockRequest(txn->GetTransactionId(), lock_mode, oid, rid);
+    row_lock_request_queue->request_queue_.push_back(row_lock_request);
 
-    while (!CanGrantLock(new_request, lock_request_queue.get())) {
-      lock_request_queue->cv_.wait(lock);
+    while (!GrantLock(row_lock_request, row_lock_request_queue.get())) {
+      row_lock_request_queue->cv_.wait(lock);
+        if (txn->GetState() == TransactionState::ABORTED) {
+          // transaction is aborted in the meantime
+          row_lock_request_queue->request_queue_.remove(row_lock_request);
+          row_lock_request_queue->cv_.notify_all();
+          return false;
+        }
     }
     // Granted the lock
-    txn->AddRowLock(lock_mode, oid, rid);
+    txn->AddRowLockToSet(lock_mode, oid, rid);
+    row_lock_request->granted_ = true;
     return true;
   }
 
@@ -333,17 +328,17 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
   // Since each transaction runs in a separate thread, this lock request must be granted alreadly.
   // Same lock node - we just ignore the new lock request.
   // Different lock mode - we try to upgrade.
-  if (lock_request->lock_mode_ == lock_mode) {
+  if (row_lock_request->lock_mode_ == lock_mode) {
     return true;
   }
 
   // Check upgrade compatibility
-  if (lock_request_queue->upgrading_ != INVALID_TXN_ID) {
+  if (row_lock_request_queue->upgrading_ != INVALID_TXN_ID) {
     txn->SetState(TransactionState::ABORTED);
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::UPGRADE_CONFLICT);
   }
 
-  auto compatible = CheckUpgradeCompatible(lock_request->lock_mode_, lock_mode);
+  auto compatible = CheckUpgradeValid(row_lock_request->lock_mode_, lock_mode);
   if (!compatible) {
     txn->SetState(TransactionState::ABORTED);
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::UPGRADE_CONFLICT);
@@ -351,62 +346,74 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
 
   // Upgrade
   // Step 1: Remove old lock request
-  lock_request_queue->request_queue_.remove(lock_request);
-  txn->RemoveRowLock(lock_request->lock_mode_, oid, rid);
-  delete lock_request;
+  row_lock_request_queue->request_queue_.remove(row_lock_request);
+  txn->RemoveRowLockFromSet(row_lock_request->lock_mode_, oid, rid);
+  delete row_lock_request;
 
   // Step 2: Create new lock request and insert it after granted locks and before waiting locks
   auto upgrade_request = new LockRequest(txn->GetTransactionId(), lock_mode, oid, rid);
-  auto it = lock_request_queue->request_queue_.begin();
-  while (it != lock_request_queue->request_queue_.end() && (*it)->granted_) {
+  auto it = row_lock_request_queue->request_queue_.begin();
+  while (it != row_lock_request_queue->request_queue_.end() && (*it)->granted_) {
     it++;
   }
-  lock_request_queue->request_queue_.insert(it, upgrade_request);
+  row_lock_request_queue->request_queue_.insert(it, upgrade_request);
 
   // Step 3: Mark as upgrading
-  lock_request_queue->upgrading_ = txn->GetTransactionId();
+  row_lock_request_queue->upgrading_ = txn->GetTransactionId();
 
   // Step 4: Wait for upgrade to be granted
-  while (!CanGrantLock(upgrade_request, lock_request_queue.get())) {
-    lock_request_queue->cv_.wait(lock);
+  while (!GrantLock(upgrade_request, row_lock_request_queue.get())) {
+    row_lock_request_queue->cv_.wait(lock);
+    if (txn->GetState() == TransactionState::ABORTED) {
+      // transaction is aborted in the meantime
+      row_lock_request_queue->upgrading_ = INVALID_TXN_ID;
+      row_lock_request_queue->request_queue_.remove(upgrade_request);
+      row_lock_request_queue->cv_.notify_all();
+      return false;
+    }
   }
 
   // Step 5: Granted
   upgrade_request->granted_ = true;
-  lock_request_queue->upgrading_ = INVALID_TXN_ID;
+  row_lock_request_queue->upgrading_ = INVALID_TXN_ID;
   return true;
 }
 
 auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID &rid) -> bool {
-  // Step 1: Do we try to unlock a row lock that we do not hold?
-  auto lock_mode = txn->FindRowLock(oid, rid);
-  if (!lock_mode.has_value()) {
+  std::cout << txn->GetTransactionId() << " UnLockRow " << rid.GetSlotNum() << std::endl;
+  // Step 1: try to unlock a lock that is not in any lock request queue.
+  row_lock_map_latch_.lock();
+  if (row_lock_map_.find(rid) == row_lock_map_.end()) {
+    row_lock_map_latch_.unlock();
+    txn->SetState(TransactionState::ABORTED);
+    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
+  }
+
+  auto row_lock_request_queue = row_lock_map_[rid];
+  std::unique_lock<std::mutex> lock(row_lock_request_queue->latch_);
+  row_lock_map_latch_.unlock();
+
+  LockRequest *row_lock_request = nullptr;
+  for (auto request : row_lock_request_queue->request_queue_) {
+    if (request->txn_id_ == txn->GetTransactionId()) {
+      row_lock_request = request;
+      break;
+    }
+  }
+
+  if (row_lock_request == nullptr) {
     txn->SetState(TransactionState::ABORTED);
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
   }
 
   // Step 2: Remove the lock request from the lock request queue
-  row_lock_map_latch_.lock();
-  auto lock_request_queue = row_lock_map_[rid];
-  lock_request_queue->latch_.lock();
-  row_lock_map_latch_.unlock();
-
-  // Find the lock request we need to remove
-  LockRequest *lock_request = nullptr;
-
-  for (auto *request : lock_request_queue->request_queue_) {
-    if (request->txn_id_ == txn->GetTransactionId()) {
-      lock_request = request;
-      break;
-    }
-  }
-
-  lock_request_queue->request_queue_.remove(lock_request);
-  free(lock_request);
+  row_lock_request_queue->request_queue_.remove(row_lock_request);
 
   // Step 3: Remove the lock from the transaction's lock set
-  txn->RemoveRowLock(lock_mode.value(), oid, rid);
-
+  txn->LockTxn();
+  auto lock_mode = row_lock_request->lock_mode_;
+  txn->RemoveRowLockFromSet(lock_mode, oid, rid);
+  txn->UnlockTxn();
 
   // Step 4: GROWING -> SHRINKING
   if (txn->GetState() != TransactionState::ABORTED) {
@@ -428,25 +435,230 @@ auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID 
   }
 
   // Step 5: notify waiting transactions
-  lock_request_queue->cv_.notify_all();
+  row_lock_request_queue->cv_.notify_all();
   return true;
 }
 
-void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) {}
+void LockManager::AddEdge(txn_id_t t1, txn_id_t t2) { waits_for_[t1].push_back(t2); }
 
-void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {}
+void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) {
+  auto &neighbors = waits_for_[t1];
+  neighbors.erase(std::find(neighbors.begin(), neighbors.end(), t2));
+}
 
-auto LockManager::HasCycle(txn_id_t *txn_id) -> bool { return false; }
+// Find a cycle in waits_for_, and return the largest number of transaction id.
+// dfs, find a cycle, return the max txn id in the grey set.
+auto LockManager::HasCycle(txn_id_t *txn_id) -> bool {
+  visited_.clear();
+  gray_set_.clear();
+  found_cycle_ = false;
+
+  for (auto source_txn_id : txn_set_) {
+    dfs(source_txn_id);
+    if (found_cycle_) {
+      break;
+    }
+  }
+
+  if (!found_cycle_) {
+    return false;
+  }
+
+  txn_id_t newest_txn_id = -1;
+  for (auto source_txn_id : path_) {
+    newest_txn_id = std::max(newest_txn_id, source_txn_id);
+  }
+  *txn_id = newest_txn_id;
+  return true;
+}
+
+void LockManager::dfs(txn_id_t vertex) {
+  if (found_cycle_) {
+    return;
+  }
+  visited_.insert(vertex);
+
+  gray_set_.insert(vertex);
+  for (auto neighbor : waits_for_[vertex]) {
+    if (gray_set_.find(neighbor) != gray_set_.end()) {
+      found_cycle_ = true;
+      path_ = gray_set_;
+      return;
+    }
+
+    if (visited_.find(neighbor) == visited_.end()) {
+      dfs(neighbor);
+    }
+  }
+  gray_set_.erase(vertex);
+}
+
+auto LockManager::FindTxnRowLockRequest(Transaction *txn, const RID &rid) -> LockRequest * {
+  LockRequest *result = nullptr;
+
+  // Look for the lock request for this row.
+  row_lock_map_latch_.lock();
+  if (row_lock_map_.find(rid) == row_lock_map_.cend()) {
+    row_lock_map_latch_.unlock();
+    return nullptr;
+  }
+
+  auto lock_request_queue = row_lock_map_[rid];
+  std::unique_lock<std::mutex> lock(lock_request_queue->latch_);
+  row_lock_map_latch_.unlock();
+
+  for (auto *request : lock_request_queue->request_queue_) {
+    if (request->txn_id_ == txn->GetTransactionId()) {
+      result = request;
+      break;
+    }
+  }
+
+  return result;
+}
+
+auto LockManager::FindTxnTableLockRequest(Transaction *txn, table_oid_t oid) -> LockRequest * {
+  LockRequest *result = nullptr;
+
+  // Look for the lock request for this table.
+  table_lock_map_latch_.lock();
+  if (table_lock_map_.find(oid) == table_lock_map_.cend()) {
+    table_lock_map_latch_.unlock();
+    return nullptr;
+  }
+
+  auto lock_request_queue = table_lock_map_[oid];
+  std::unique_lock<std::mutex> lock(lock_request_queue->latch_);
+  table_lock_map_latch_.unlock();
+
+  for (auto *request : lock_request_queue->request_queue_) {
+    if (request->txn_id_ == txn->GetTransactionId()) {
+      result = request;
+      break;
+    }
+  }
+
+  return result;
+}
 
 auto LockManager::GetEdgeList() -> std::vector<std::pair<txn_id_t, txn_id_t>> {
   std::vector<std::pair<txn_id_t, txn_id_t>> edges(0);
+  waits_for_latch_.lock();
+  for (auto &[txn_id, neighbors] : waits_for_) {
+    for (auto neighbor : neighbors) {
+      edges.emplace_back(txn_id, neighbor);
+    }
+  }
+  waits_for_latch_.unlock();
   return edges;
+}
+
+void LockManager::BuildWaitsForGraph() {
+  // see table_lock_map
+  table_lock_map_latch_.lock();
+  row_lock_map_latch_.lock();
+  for (auto &pair : table_lock_map_) {
+    auto lock_request_queue = pair.second;
+    std::unordered_set<txn_id_t> granted_set;
+    lock_request_queue->latch_.lock();
+    for (const auto &lock_request : lock_request_queue->request_queue_) {
+      if (lock_request->granted_) {
+        granted_set.insert(lock_request->txn_id_);
+      } else {
+        for (auto txn_id : granted_set) {
+          txn_set_.insert(lock_request->txn_id_);
+          txn_set_.insert(txn_id);
+          AddEdge(lock_request->txn_id_, txn_id);
+        }
+      }
+    }
+    lock_request_queue->latch_.unlock();
+  }
+  // table_lock_map_latch_.unlock();
+
+  // see row_lock_map
+  // row_lock_map_latch_.lock();
+  for (auto &pair : row_lock_map_) {
+    auto lock_request_queue = pair.second;
+    std::unordered_set<txn_id_t> granted_set;
+    lock_request_queue->latch_.lock();
+    for (const auto &lock_request : lock_request_queue->request_queue_) {
+      if (lock_request->granted_) {
+        granted_set.insert(lock_request->txn_id_);
+      } else {
+        for (auto txn_id : granted_set) {
+          txn_set_.insert(lock_request->txn_id_);
+          txn_set_.insert(txn_id);
+          AddEdge(lock_request->txn_id_, txn_id);
+        }
+      }
+    }
+    lock_request_queue->latch_.unlock();
+  }
+  row_lock_map_latch_.unlock();
+  table_lock_map_latch_.unlock();
 }
 
 void LockManager::RunCycleDetection() {
   while (enable_cycle_detection_) {
     std::this_thread::sleep_for(cycle_detection_interval);
     {  // TODO(students): detect deadlock
+      BuildWaitsForGraph();
+      txn_id_t abort_txn_id;
+
+      while (HasCycle(&abort_txn_id)) {
+        Transaction *txn = TransactionManager::GetTransaction(abort_txn_id);
+        txn->SetState(TransactionState::ABORTED);
+
+        // Remove abort_txn_id from waits_for
+        waits_for_latch_.lock();
+        waits_for_.erase(abort_txn_id);
+        for (auto &[txn_id, neighbors] : waits_for_) {
+          neighbors.erase(std::find(neighbors.begin(), neighbors.end(), abort_txn_id));
+        }
+
+        // Now we are aborting a transaction. This transaction might be either
+        // waiting for a table lock or a row lock.
+        // We need to notify other transactions waiting for the same resource.
+        table_lock_map_latch_.lock();
+        for (auto &[oid, lock_request_queue] : table_lock_map_) {
+          lock_request_queue->latch_.lock();
+
+          // Now we have the lock request queue for this table.
+          // Find if abort_txn_id is in this queue.
+          for (auto it = lock_request_queue->request_queue_.begin(); it != lock_request_queue->request_queue_.end();
+               ++it) {
+            if ((*it)->txn_id_ == abort_txn_id) {
+              lock_request_queue->cv_.notify_all();
+              break;
+            }
+          }
+          lock_request_queue->latch_.unlock();
+        }
+        table_lock_map_latch_.unlock();
+
+        row_lock_map_latch_.lock();
+        for (auto &[rid, lock_request_queue] : row_lock_map_) {
+          lock_request_queue->latch_.lock();
+
+          // Now we have the lock request queue for this row.
+          // Find if abort_txn_id is in this queue.
+          for (auto it = lock_request_queue->request_queue_.begin(); it != lock_request_queue->request_queue_.end();
+               ++it) {
+            if ((*it)->txn_id_ == abort_txn_id) {
+              lock_request_queue->cv_.notify_all();
+              break;
+            }
+          }
+          lock_request_queue->latch_.unlock();
+        }
+        row_lock_map_latch_.unlock();
+      }
+
+      txn_set_.clear();
+      waits_for_.clear();
+      visited_.clear();
+      gray_set_.clear();
     }
   }
 }
@@ -454,16 +666,15 @@ void LockManager::RunCycleDetection() {
 // Multiple transactions are competing for the same resource.
 // "queue" contains their lock requests.
 // At this moment, the current transaction only has one lock request on this resource.
-auto LockManager::CanGrantLock(LockRequest *request, LockRequestQueue *queue) -> bool {
+auto LockManager::GrantLock(LockRequest *request, LockRequestQueue *queue) -> bool {
   // Go through all lock requests in the queue.
   for (auto request_in_queue : queue->request_queue_) {
     // We first look at all granted locks. We check lock compatibility of our lock request with each granted lock.
     if (request_in_queue->granted_) {
-      if (!CheckLocksCompatible(request_in_queue->lock_mode_, request->lock_mode_)) {
+      if (!CheckTwoLocksCompatible(request_in_queue->lock_mode_, request->lock_mode_)) {
         return false;
       }
     }
-
     // Now we start look at all waiting locks.
     // If I am the first one in the waiting queue, I can be granted the lock.
     // Otherwise, I have to wait.
