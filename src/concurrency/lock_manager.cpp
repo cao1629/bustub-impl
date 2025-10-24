@@ -272,7 +272,6 @@ auto LockManager::UnlockTable(Transaction *txn, const table_oid_t &oid) -> bool 
 }
 
 auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid) -> bool {
-  std::cout << txn->GetTransactionId() << " LockRow " << rid.GetSlotNum() << std::endl;
   // Check lock compatability
   auto abort_reason = CheckLockRequestValid(txn, lock_mode);
   if (abort_reason.has_value()) {
@@ -380,7 +379,6 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
 }
 
 auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID &rid) -> bool {
-  std::cout << txn->GetTransactionId() << " UnLockRow " << rid.GetSlotNum() << std::endl;
   // Step 1: try to unlock a lock that is not in any lock request queue.
   row_lock_map_latch_.lock();
   if (row_lock_map_.find(rid) == row_lock_map_.end()) {

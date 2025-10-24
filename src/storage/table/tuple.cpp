@@ -26,22 +26,26 @@ namespace bustub {
 Tuple::Tuple(std::vector<Value> values, const Schema *schema) : allocated_(true) {
   assert(values.size() == schema->GetColumnCount());
 
-  // 1. Calculate the size of the tuple.
+  // Calculate the size of the tuple.
+  // (1) total size of all fixed-length columns
   uint32_t tuple_size = schema->GetLength();
+
+  // (2) add all variable-length columns to "tuple_size"
   for (auto &i : schema->GetUnlinedColumns()) {
     auto len = values[i].GetLength();
     if (len == BUSTUB_VALUE_NULL) {
       len = 0;
     }
+
     tuple_size += (len + sizeof(uint32_t));
   }
 
-  // 2. Allocate memory.
+  // Allocate memory.
   size_ = tuple_size;
   data_ = new char[size_];
   std::memset(data_, 0, size_);
 
-  // 3. Serialize each attribute based on the input value.
+  // Serialize each attribute based on the input value.
   uint32_t column_count = schema->GetColumnCount();
   uint32_t offset = schema->GetLength();
 

@@ -90,7 +90,9 @@ class TransactionManager {
    * Releases all the locks held by the given transaction.
    * @param txn the transaction whose locks should be released
    */
-  // Gather held locks from transaction's lock set, and then release them via lock manager.
+  // Gather held locks from transaction's lock set, and then release them via
+  // lock manager's UnlockTable and UnlockRow.
+  // Here we do not care about those waiting lock requests.
   void ReleaseLocks(Transaction *txn) {
     // Gather all shared locks and exclusive locks together.
     txn->LockTxn();

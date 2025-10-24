@@ -43,6 +43,9 @@ auto TransactionManager::Begin(Transaction *txn, IsolationLevel isolation_level)
   return txn;
 }
 
+// (1) Set transaction's state COMMITTED
+// (2) ApplyDelete all deletions
+// (3) ReleaseLocks(txn)
 void TransactionManager::Commit(Transaction *txn) {
   txn->SetState(TransactionState::COMMITTED);
 

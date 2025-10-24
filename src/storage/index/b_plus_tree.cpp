@@ -286,7 +286,7 @@ auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key, Transaction *transaction) -> P
 
   while (!p->IsLeafPage()) {
     auto *internal_node = reinterpret_cast<InternalPage *>(p);
-    auto child_page_id = internal_node->FindNextLevelPage(key, comparator_);
+    auto child_page_id = internal_node->FindChild(key, comparator_);
 
     buffer_pool_manager_->UnpinPage(p->GetPageId(), false);
     page = buffer_pool_manager_->FetchPage(child_page_id);
@@ -499,7 +499,7 @@ void BPLUSTREE_TYPE::Redistribute(N *node, N *sibling, bool is_left_sibling,
     auto sibling_internal_node = reinterpret_cast<InternalPage*>(sibling);
 
     if (is_left_sibling) {
-      sibling_internal_node->MoveLastToHeadOf(internal_node, buffer_pool_manager_, parent->KeyAt(index));
+      sibling_internal_node->MoveLastToFrontOf(internal_node, buffer_pool_manager_, parent->KeyAt(index));
       parent->SetKeyAt(index, internal_node->KeyAt(0));
     } else {
       sibling_internal_node->MoveFirstToEndOf(internal_node, buffer_pool_manager_, parent->KeyAt(index+1));

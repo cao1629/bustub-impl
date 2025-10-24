@@ -37,6 +37,7 @@ TableHeap::TableHeap(BufferPoolManager *buffer_pool_manager, LockManager *lock_m
 }
 
 // copy tuple.data_ into the page.
+// This tuple is not in the table yet, so its rid is invalid.
 auto TableHeap::InsertTuple(const Tuple &tuple, RID *rid, Transaction *txn) -> bool {
   if (tuple.size_ + 32 > BUSTUB_PAGE_SIZE) {  // larger than one page size
     txn->SetState(TransactionState::ABORTED);

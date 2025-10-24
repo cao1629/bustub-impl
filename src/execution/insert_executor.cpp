@@ -25,9 +25,24 @@ InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *
 
 void InsertExecutor::Init() {
   child_executor_->Init();
+
+  auto *lock_mgr = exec_ctx_->GetLockManager();
+  auto *txn = exec_ctx_->GetTransaction();
+
+  try {
+    bool is_locked = lock_mgr->LockTable(txn, LockManager::LockMode::INTENTION_EXCLUSIVE, table_info_->oid_);
+    if (!is_locked) {
+      throw ExecutionException("Insert Executor Get Table Lock Failed");
+    }
+  } catch (TransactionAbortException &ex) {
+    throw ExecutionException("Insert Executor Get Table Lock Failed");
+  }
 }
 
 auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
+  auto *lock_mgr = exec_ctx_->GetLockManager();
+  auto *txn = exec_ctx_->GetTransaction();
+
   if (done_) {
     return false;
   }
@@ -40,11 +55,27 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   // Both "to_insert_tuple" and "insert_rid" are out parameters.
   // If child_executor_ is a ValuesExecutor. Next() produces a tuple without rid.
   while (child_executor_->Next(&to_insert_tuple, &emit_rid)) {
+
     // Insert a tuple from child executor's Next() method
     // "rid" will be updated by InsertTuple() method.
-    table_info_->table_->InsertTuple(to_insert_tuple, rid, exec_ctx_->GetTransaction());
+
+    // I think we should lock the inserted row before InsertTuple()
+    // Assume the current transaction is interrupted here, and another transaction
+    // tries to read the just inserted tuple. In this case, the other transaction
+    // read an uncommited write.
+    if (table_info_->table_->InsertTuple(to_insert_tuple, rid, exec_ctx_->GetTransaction())) {
+      try {
+        bool is_locked = lock_mgr->LockRow(txn, LockManager::LockMode::EXCLUSIVE, table_info_->oid_, *rid);
+        if (!is_locked) {
+          throw ExecutionException("Insert Executor Get Row Lock Failed");
+        }
+      } catch (TransactionAbortException &ex) {
+        throw ExecutionException("Insert Executor Get Row Lock Failed");
+      }
+    }
 
     // Insert the tuple into all indexes associated with the table.
+    // Page latches are used to protecting indexes.
     for (const auto index_info : table_indexes_) {
       // key: index key
       // value: rid, already updated by InsertTuple() method

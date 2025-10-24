@@ -210,12 +210,11 @@ auto TablePage::UpdateTuple(const Tuple &new_tuple, Tuple *old_tuple, const RID 
   return true;
 }
 
-// [1] Commit a deletion
-// [2] Rollback an insertion
-//
+// Case 1: commit a deletion
+// Case 2: rollback an insertion
 // what exactly do we do?
-// (1) remove the tuple from the back part of the page
-// (2) set its offset and size to 0 and keep them in the front part of the page for reuse
+// (1) remove the tuple in the back of the page. We need to shift all tuples before it to the right.
+// (2) set its offset and size to 0 in the front of the page for reuse
 // (3) update all other tuple offsets
 void TablePage::ApplyDelete(const RID &rid, Transaction *txn, LogManager *log_manager) {
   uint32_t slot_num = rid.GetSlotNum();
