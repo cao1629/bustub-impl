@@ -77,9 +77,9 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const ->
 // I'm sure "prev" exists in this page.
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertAfterValue(const ValueType &prev, const KeyType &key, const ValueType &value) {
-  auto index = ValueIndex(prev);
-  std::move_backward(array_+index+1, array_+GetSize(), array_+GetSize()+1);
-  *(array_+index+1) = {key, value};
+  auto idx = ValueIndex(prev);
+  std::move_backward(array_+idx+1, array_+GetSize(), array_+GetSize()+1);
+  *(array_+idx+1) = {key, value};
   IncreaseSize(1);
 }
 
@@ -90,23 +90,29 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertFirst(const KeyType &key, const Value
   IncreaseSize(1);
 }
 
-// Now I am in an internal page. Given a key, find the page on the next level to go down.
+// I'm going down the tree to find the leaf page for a given key.
+// Now I'm using this method to find the child I need to go down to.
+// Since items are sorted by key, we can use binary search here.
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindNextLevelPage(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::FindChild(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
   // std::lower_bound to find the first element that is not less than "key".
   auto it = std::lower_bound(
       array_ + 1, array_ + GetSize(), key,
       [&comparator](const auto &pair, const KeyType &k) { return comparator(pair.first, k) < 0; });
 
   // v1 k2 v2 ..... kn v4 < key
+  // the given key is greater than all keys in this page.
   if (it == array_ + GetSize()) {
     return array_[GetSize() - 1].second;
   }
 
+  // We found the first item whose key is equal to "key".
   if (comparator(key, it->first) == 0) {
     return it->second;
   }
 
+  // We found the first item whose key is greater than "key".
+  // In this case, the previous item is the last item whose key is less than "key".
   return std::prev(it)->second;
 }
 
@@ -127,12 +133,12 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *rec
 
 // Move the last key/value pair from this page to the front of "recipient".
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToHeadOf(BPlusTreeInternalPage *recipient,
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeInternalPage *recipient,
                                                                           BufferPoolManager *buffer_pool_manager,
                                                                           const KeyType &separator_key) {
   auto last_item = array_[GetSize()-1];
   recipient->SetKeyAt(0, separator_key);
-  recipient->CopyToHead(last_item, buffer_pool_manager);
+  recipient->CopyToFront(last_item, buffer_pool_manager);
   IncreaseSize(-1);
 }
 
@@ -156,7 +162,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToHead(const MappingType &item, BufferPoolManager *buffer_pool_manager) {
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyToFront(const MappingType &item, BufferPoolManager *buffer_pool_manager) {
   std::move_backward(array_, array_+GetSize(), array_+GetSize()+1);
   *array_ = item;
   IncreaseSize(1);

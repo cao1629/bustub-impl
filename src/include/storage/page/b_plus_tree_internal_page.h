@@ -39,15 +39,19 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   // must call initialize method after "create" a new node
   void Init(page_id_t page_id, page_id_t parent_id = INVALID_PAGE_ID, int max_size = INTERNAL_PAGE_SIZE);
 
+  // Given an index, return the key stored at that index.
   auto KeyAt(int index) const -> KeyType;
 
+  // Given an index, set the key stored at that index.
   void SetKeyAt(int index, const KeyType &key);
 
+  // Given an index, return the value stored at that index.
   auto ValueAt(int index) const -> ValueType;
 
+  // Given an index, remove the item at that index.
   void RemoveAt(int index);
 
-  auto FindNextLevelPage(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
+  auto FindChild(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
 
   auto ValueIndex(const ValueType &value) const -> int;
 
@@ -62,7 +66,7 @@ class BPlusTreeInternalPage : public BPlusTreePage {
 
   // After we move the last item to the recipient, the first item of the recipient becomes
   // the second item, but it has no key. We need to provide a key.
-  void MoveLastToHeadOf(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager,
+  void MoveLastToFrontOf(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager,
     const KeyType &separator_key);
 
   // the recipient is an empty page.
@@ -77,7 +81,7 @@ class BPlusTreeInternalPage : public BPlusTreePage {
 
   void CopyToEnd(const MappingType &item, BufferPoolManager *buffer_pool_manager);
 
-  void CopyToHead(const MappingType &item, BufferPoolManager *buffer_pool_manager);
+  void CopyToFront(const MappingType &item, BufferPoolManager *buffer_pool_manager);
 
   void CopyNToEnd(MappingType *items, int size, BufferPoolManager *buffer_pool_manager);
 };
