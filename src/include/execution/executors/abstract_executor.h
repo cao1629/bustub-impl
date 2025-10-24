@@ -52,6 +52,7 @@ class AbstractExecutor {
   /** @return The executor context in which this executor runs */
   auto GetExecutorContext() -> ExecutorContext * { return exec_ctx_; }
 
+
  protected:
   /** The executor context in which the executor runs */
   ExecutorContext *exec_ctx_;

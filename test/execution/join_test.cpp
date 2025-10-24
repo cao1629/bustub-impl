@@ -9,7 +9,7 @@ class JoinTest : public ::testing::Test {
     bustub_instance_ = std::make_unique<BustubInstance>("test.db");
     bustub_instance_->GenerateMockTable();
     if (bustub_instance_->buffer_pool_manager_ != nullptr) {
-      bustub_instance_->GenerateMockTable();
+      bustub_instance_->GenerateTestTable();
     }
   }
 
@@ -19,9 +19,17 @@ class JoinTest : public ::testing::Test {
   std::unique_ptr<BustubInstance> bustub_instance_;
 };
 
-TEST_F(JoinTest, Test1) {
+TEST_F(JoinTest, TestNestedLoopJoin) {
   std::string sql = "select * from test_2, test_3 where test_2.colA = test_3.colA";
   NoopWriter writer;
+  bustub_instance_->ExecuteSql(sql, writer);
+}
+
+TEST_F(JoinTest, TestNesteIndexJoin) {
+  NoopWriter writer;
+  std::string create_index_sql = "create index t3colA on test_3(colA)";
+  std::string sql = "select * from test_2, test_3 where test_2.colA = test_3.colA";
+  bustub_instance_->ExecuteSql(create_index_sql, writer);
   bustub_instance_->ExecuteSql(sql, writer);
 }
 

@@ -299,47 +299,52 @@ auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key, Transaction *transaction) -> P
 
 // After splitting the parent page, we need to insert a new k/v pair into its parent.
 // k: the first key in the new node
-// after inserting k/v pair into the parent, we do not need the first key any more if "new_node" is an internl page
+// after inserting k/v pair into the parent, we do not need the first key any more if "new_node" is an internal page
 // v: the page id of the new node
 //
-// [1] If the old node is the root, we need to create a new root page.
-// [2] If the parent node is not full (< max size), we do not need to split it.
-// [3] If the parent node is full (= max size), we need to split it.
-// We might need to insert a new item into parent recursively.
+// {1} If the old node is the root, we need to create a new root page.
+// {2} If the parent node is not full (< max size), we do not need to split it.
+// {3} If the parent node is full (= max size), we need to split it recursively.
 INDEX_TEMPLATE_ARGUMENTS
-void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, BPlusTreePage *new_node, const KeyType &key) {
-  // The old node is the root. Now we need a new root page with two items.
-  if (new_node->IsRootPage()) {
-    auto new_root_page = buffer_pool_manager_->NewPage(&root_page_id_);
-    auto new_root_node = reinterpret_cast<InternalPage*>(new_root_page->GetData());
-    new_root_node->Init(root_page_id_, INVALID_PAGE_ID, internal_max_size_);
+void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *tree_page, BPlusTreePage *new_tree_page, const KeyType &key) {
+  // The old tree page is the root. Now we need to create a new root with two children.
+  if (tree_page->IsRootPage()) {
+    // Create a new root page
+    auto new_root_tree_page = buffer_pool_manager_->NewPage(&root_page_id_);
+    auto new_root_tree_internal_page = reinterpret_cast<InternalPage*>(new_root_tree_page->GetData());
+    new_root_tree_internal_page->Init(root_page_id_, INVALID_PAGE_ID, internal_max_size_);
 
-    auto old_leaf_node = reinterpret_cast<LeafPage*>(old_node);
-    auto new_leaf_node = reinterpret_cast<LeafPage*>(new_node);
+    auto tree_leaf_page = reinterpret_cast<LeafPage*>(tree_page);
+    auto new_tree_leaf_page = reinterpret_cast<LeafPage*>(new_tree_page);
 
-    new_root_node->InsertFirst(old_leaf_node->KeyAt(0), old_node->GetPageId());
-    new_root_node->InsertAfterValue(old_leaf_node->GetPageId(), key, new_leaf_node->GetPageId());
+    // Insert two children into the new root
+    new_root_tree_internal_page->InsertFirst(tree_leaf_page->KeyAt(0), tree_page->GetPageId());
+    new_root_tree_internal_page->InsertAfterValue(tree_leaf_page->GetPageId(), key, new_tree_leaf_page->GetPageId());
 
-    buffer_pool_manager_->UnpinPage(new_root_node->GetPageId(), true);
+    // Update the parent page id of the two children
+    tree_page->SetParentPageId(new_root_tree_page->GetPageId());
+    new_tree_page->SetParentPageId(new_root_tree_page->GetPageId());
+
+    buffer_pool_manager_->UnpinPage(new_root_tree_page->GetPageId(), true);
     return;
   }
 
-  // old_node and new_node are not root nodes.
-  auto parent_page = buffer_pool_manager_->FetchPage(old_node->GetPageId());
-  auto *parent_node = reinterpret_cast<InternalPage *>(parent_page->GetData());
+  // old tree page is not the root. We first fetch its parent page.
+  // Then we insert the new split page into the parent page.
+  auto *parent_tree_page = buffer_pool_manager_->FetchPage(tree_page->GetParentPageId());
+  auto *parent_tree_internal_page = reinterpret_cast<InternalPage *>(parent_tree_page->GetData());
 
-  // Like in leaf pages, we do insertion first. When the size hits max_size, we split it.
-  parent_node->InsertAfterValue(old_node->GetPageId(), key, new_node->GetPageId());
+  parent_tree_internal_page->InsertAfterValue(tree_page->GetPageId(), key, new_tree_page->GetPageId());
 
   // no need to split
-  if (parent_node->GetSize() < internal_max_size_) {
-    buffer_pool_manager_->UnpinPage(parent_node->GetPageId(), true);
+  if (parent_tree_internal_page->GetSize() < internal_max_size_) {
+    buffer_pool_manager_->UnpinPage(parent_tree_internal_page->GetPageId(), true);
     return;
   }
 
-  auto new_parent_sibling = Split(parent_node);
-  const auto &new_key = new_parent_sibling->KeyAt(0);
-  InsertIntoParent(parent_node, new_parent_sibling, new_key);
+  auto new_right_sibling = Split(parent_tree_internal_page);
+  const auto &new_key = new_right_sibling->KeyAt(0);
+  InsertIntoParent(parent_tree_internal_page, new_right_sibling, new_key);
 }
 
 // (1) new page

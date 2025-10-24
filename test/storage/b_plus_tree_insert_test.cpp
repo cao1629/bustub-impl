@@ -17,6 +17,7 @@
 #include "gtest/gtest.h"
 #include "storage/index/b_plus_tree.h"
 #include "test_util.h"  // NOLINT
+#include "concurrency/transaction.h"
 
 namespace bustub {
 

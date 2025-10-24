@@ -76,7 +76,7 @@ class BPlusTree {
   // given any key, we can find a leaf page that may hold the key
   auto FindLeaf(const KeyType &key, Transaction *transaction = nullptr) -> Page*;
 
-  void InsertIntoParent(BPlusTreePage *old_node, BPlusTreePage *new_node, const KeyType &key);
+  void InsertIntoParent(BPlusTreePage *tree_page, BPlusTreePage *new_tree_page, const KeyType &key);
 
   template <typename N>
   auto Split(N *node) ->  N*;

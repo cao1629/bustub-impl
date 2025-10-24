@@ -16,13 +16,14 @@
 
 namespace bustub {
 
-NestIndexJoinExecutor::NestIndexJoinExecutor(ExecutorContext *exec_ctx, const NestedIndexJoinPlanNode *plan,
+NestedIndexJoinExecutor::NestedIndexJoinExecutor(ExecutorContext *exec_ctx, const NestedIndexJoinPlanNode *plan,
                                              std::unique_ptr<AbstractExecutor> &&child_executor)
     : AbstractExecutor(exec_ctx),
       plan_(plan),
       child_executor_(std::move(child_executor)),
       index_info_(exec_ctx->GetCatalog()->GetIndex(plan_->GetIndexOid())),
       table_info_(exec_ctx->GetCatalog()->GetTable(plan_->GetInnerTableOid())),
+
       // Why we can use reinterpret_cast here?
       // Because what we get from index_info_->index_.get() is a pointer to
       // BPlusTreeIndex<IntegerKeyType, IntegerValueType, IntegerComparatorType>;
@@ -33,9 +34,9 @@ NestIndexJoinExecutor::NestIndexJoinExecutor(ExecutorContext *exec_ctx, const Ne
   }
 }
 
-void NestIndexJoinExecutor::Init() { child_executor_->Init(); }
+void NestedIndexJoinExecutor::Init() { child_executor_->Init(); }
 
-auto NestIndexJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+auto NestedIndexJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   Tuple left_tuple;
   RID left_rid;
   std::vector<Value> vals;

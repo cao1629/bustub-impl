@@ -21,9 +21,11 @@ void TopNExecutor::Init() {
   }
 
   while (child_executor_->Next(&tuple, &rid)) {
-    pq_.pop();
     pq_.push(tuple);
+    pq_.pop();
   }
+
+
 }
 
 auto TopNExecutor::Next(Tuple *tuple, RID *rid) -> bool {

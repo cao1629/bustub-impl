@@ -37,6 +37,8 @@ void AggregationExecutor::Init() {
     auto value = MakeAggregateValue(&tuple);
     aht_.InsertCombine(key, value);
   }
+
+  aht_iter_ = aht_.Begin();
 }
 
 // What do we expect for Next()?

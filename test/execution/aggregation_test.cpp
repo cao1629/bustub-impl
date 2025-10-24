@@ -10,7 +10,7 @@ protected:
     bustub_instance_ = std::make_unique<BustubInstance>("test.db");
     bustub_instance_->GenerateMockTable();
     if (bustub_instance_->buffer_pool_manager_ != nullptr) {
-      bustub_instance_->GenerateMockTable();
+      bustub_instance_->GenerateTestTable();
     }
   }
 
@@ -18,14 +18,15 @@ protected:
 
   }
 
-private:
   // If we use BustubInstance *bustub_instance_, we need to free the memory manually.
   std::unique_ptr<BustubInstance> bustub_instance_;
 };
 
 
 TEST_F(AggregationTest, TestCountStar) {
-
+  std::string sql = "select count(*) from test_1";
+  NoopWriter writer;
+  bustub_instance_->ExecuteSql(sql, writer);
 }
 
 TEST_F(AggregationTest, TestCount) {

@@ -30,7 +30,7 @@ namespace bustub {
 /**
  * IndexJoinExecutor executes index join operations.
  */
-class NestIndexJoinExecutor : public AbstractExecutor {
+class NestedIndexJoinExecutor : public AbstractExecutor {
  public:
   /**
    * Creates a new nested index join executor.
@@ -38,7 +38,7 @@ class NestIndexJoinExecutor : public AbstractExecutor {
    * @param plan the nested index join plan node
    * @param child_executor the outer table
    */
-  NestIndexJoinExecutor(ExecutorContext *exec_ctx, const NestedIndexJoinPlanNode *plan,
+  NestedIndexJoinExecutor(ExecutorContext *exec_ctx, const NestedIndexJoinPlanNode *plan,
                         std::unique_ptr<AbstractExecutor> &&child_executor);
 
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }

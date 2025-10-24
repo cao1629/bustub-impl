@@ -37,9 +37,10 @@ BufferPoolManagerInstance::~BufferPoolManagerInstance() {
   delete replacer_;
 }
 
-// [1] Free frames.
-// [2] No free frames. Evict a frame with the replacement policy.
-// [3] No free frames, and no evictable frames.
+// Case 1: there are free frames. We just load the page into one of the free frames.
+// Case 2: there are no free frames.
+// We ask the replacer to evict a frame. If the frame is dirty, we write it back to disk first.
+// If no frame is evictable, we return nullptr;
 auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
   std::lock_guard<std::mutex> lock(latch_);
 
@@ -57,16 +58,16 @@ auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
   }
 
   *page_id = AllocatePage();
-
   frame_id_t frame_id;
 
   // Make room for the new page.
+  // Reuse a free frame or evict a frame through the replacer.
   if (!free_list_.empty()) {
     frame_id = free_list_.front();
     free_list_.pop_front();
   } else {
     replacer_->Evict(&frame_id);
-    // Is it a dirty page?
+    // If this page is dirty, we need to write it back to disk.
     page_id_t evicted_page_id = pages_[frame_id].GetPageId();
     if (pages_[frame_id].IsDirty()) {
       disk_manager_->WritePage(evicted_page_id, pages_[frame_id].GetData());
@@ -79,6 +80,9 @@ auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
 
   page_table_->Insert(*page_id, frame_id);
   pages_[frame_id].page_id_ = *page_id;
+
+  // Why we set pin count to 1 here?
+  // Because we return a pointer to the page to the caller.
   pages_[frame_id].pin_count_ = 1;
 
   replacer_->RecordAccess(frame_id);
@@ -87,8 +91,9 @@ auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
   return &pages_[frame_id];
 }
 
-// [1] Page is in the buffer pool.
-// [2] Page is not in the buffer pool.
+
+// Case 1: the page is in the buffer pool. We just return it and increment the pin count.
+// Case 2: the page is not in the buffer pool. We need to load it from disk.
 auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
   std::lock_guard<std::mutex> lock(latch_);
 

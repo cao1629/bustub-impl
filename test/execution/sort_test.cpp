@@ -24,4 +24,10 @@ TEST_F(SortTest, Test1) {
   bustub_instance_->ExecuteSql(sql, writer);
 }
 
+
+TEST_F(SortTest, TestTopN) {
+  std::string sql = "select * from test_1 order by colB limit 10";
+  NoopWriter writer;
+  bustub_instance_->ExecuteSql(sql, writer);
+}
 }  // namespace bustub

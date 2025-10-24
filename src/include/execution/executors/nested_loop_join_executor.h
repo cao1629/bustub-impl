@@ -67,6 +67,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
 
   bool matched_;
 
+  Tuple current_left_tuple_;
 
   auto Matched(const Tuple &left_tuple, const Tuple &right_tuple) const -> bool;
 };

@@ -64,10 +64,11 @@ class BPlusTreePage {
 
  private:
   // member variable, attributes that both internal and leaf page share
-  IndexPageType page_type_;
+
+  IndexPageType page_type_; // 4 bytes
   lsn_t lsn_ __attribute__((__unused__));
   int size_;
-  int max_size_;
+  int max_size_; // When this page reaches "max_size", it needs to be split.
   page_id_t parent_page_id_;
   page_id_t page_id_;
 };

@@ -44,27 +44,33 @@ void NestedLoopJoinExecutor::Init() {
   // -1 means we haven't started scanning the right tuples for the current left tuple.
   cursor_ = -1;
 
+  // This is used for left outer join.
+  // false indicates no right tuples match the current left tuple.
   matched_ = false;
 }
 
 auto NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  Tuple left_tuple;
   RID left_rid;
 
   // If cursor_ >= 0, we are in the middle of scanning right tuples.
   // If cursor_ is -1, we are done scanning right tuples for the left tuple. We need to get a new left tuple.
-  while (cursor_ >= 0 || !left_executor_->Next(&left_tuple, &left_rid)) {
+  // If cursor_ is -1 and there are no more left tuples, we are done.
+  while (cursor_ >= 0 || left_executor_->Next(&current_left_tuple_, &left_rid)) {
     if (cursor_ < 0) {
       cursor_ = 0;
       matched_ = false;
     }
     std::vector<Value> vals;
+
+    // right_tuples[cursor_ : size-1]
     for (uint32_t idx = cursor_; idx < right_tuples_.size(); ++idx) {
       const auto &right_tuple = right_tuples_[idx];
-      if (Matched(left_tuple, right_tuple)) {
+
+      // match
+      if (Matched(current_left_tuple_, right_tuple)) {
         // Join two tuples
         for (uint32_t i = 0; i < left_executor_->GetOutputSchema().GetColumnCount(); ++i) {
-          vals.push_back(left_tuple.GetValue(&left_executor_->GetOutputSchema(), i));
+          vals.push_back(current_left_tuple_.GetValue(&left_executor_->GetOutputSchema(), i));
         }
 
         for (uint32_t i = 0; i < right_executor_->GetOutputSchema().GetColumnCount(); ++i) {
@@ -78,17 +84,17 @@ auto NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
         return true;
       }
 
-      // try to match the next right tuple
+      // no match, go to see the next right tuple
       cursor_++;
     }
 
+    // we have seen all the right tuples for the current left tuple.
     cursor_ = -1;
 
-    // We have scanned all right tuples for the current left tuple.
     // Check if it is a left outer join.
     if (!matched_ && plan_->GetJoinType() == JoinType::LEFT) {
       for (uint32_t i = 0; i < left_executor_->GetOutputSchema().GetColumnCount(); ++i) {
-        vals.push_back(left_tuple.GetValue(&left_executor_->GetOutputSchema(), i));
+        vals.push_back(current_left_tuple_.GetValue(&left_executor_->GetOutputSchema(), i));
       }
 
       for (uint32_t i = 0; i < right_executor_->GetOutputSchema().GetColumnCount(); ++i) {
