@@ -50,6 +50,9 @@ auto TableHeap::InsertTuple(const Tuple &tuple, RID *rid, Transaction *txn) -> b
     return false;
   }
 
+  // Is everything correct if the thread is interrupted here?
+  // We already got the handle of the page, but haven't latched it yet.
+  // Another thread is able to modify the page.
   cur_page->WLatch();
 
   // Insert into the first page with enough space. If no such page exists, create a new page and insert into that.

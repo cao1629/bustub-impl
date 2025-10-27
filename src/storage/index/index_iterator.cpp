@@ -40,8 +40,12 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
   if (pos_ == leaf_node_->GetSize()-1 && leaf_node_->GetNextPageId() != INVALID_PAGE_ID) {
     page_id_t next = leaf_node_->GetNextPageId();
     buffer_pool_manager_->UnpinPage(page_->GetPageId(), false);
+    auto *t = page_;
     page_ = buffer_pool_manager_->FetchPage(next);
     leaf_node_ = reinterpret_cast<LeafPage*>(page_->GetData());
+
+    page_->RLatch();
+    t->RUnlatch();
     return *this;
   }
 

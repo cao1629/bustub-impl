@@ -22,6 +22,9 @@ namespace bustub {
 
 class Transaction;
 
+enum class Operation {READ, INSERT, DELETE};
+
+
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
 
 /**
@@ -46,12 +49,12 @@ class BPlusTree {
   // Returns true if this B+ tree has no keys and values.
   auto IsEmpty() const -> bool;
 
-  auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
+  auto Insert(const KeyType &key, const ValueType &value, Transaction *txn = nullptr) -> bool;
 
-  void Remove(const KeyType &key, Transaction *transaction = nullptr);
+  void Remove(const KeyType &key, Transaction *txn = nullptr);
 
   // return the value associated with a given key
-  auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
+  auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *txn = nullptr) -> bool;
 
   // return the page id of the root node
   auto GetRootPageId() -> page_id_t;
@@ -74,9 +77,9 @@ class BPlusTree {
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
 
   // given any key, we can find a leaf page that may hold the key
-  auto FindLeaf(const KeyType &key, Transaction *transaction = nullptr) -> Page*;
+  auto FindLeaf(const KeyType &key, Operation operation, Transaction *txn = nullptr) -> Page*;
 
-  void InsertIntoParent(BPlusTreePage *tree_page, BPlusTreePage *new_tree_page, const KeyType &key);
+  void InsertIntoParent(BPlusTreePage *tree_page, BPlusTreePage *new_tree_page, const KeyType &key, Transaction *txn);
 
   template <typename N>
   auto Split(N *node) ->  N*;
@@ -85,14 +88,14 @@ class BPlusTree {
   // coalesce: move all items from "node" to its sibling, then delete "node"
   // redistribute: move one item from sibling to "node", no node is deleted
   template <typename N>
-  auto RedistributeOrCoalesce(N *node) -> bool;
+  auto RedistributeOrCoalesce(N *node, Transaction *txn) -> bool;
 
   // return value indicates whether parent node should be deleted after this operation.
   // We coalesce two nodes into one, then one entry in parent node is deleted.
   // We then probably need to coalesce or redistribute the parent node.
   // If we coalesce the parent node with its sibling, then the parent node will be deleted.
   template <typename N>
-  void Coalesce(N *node, N *sibling, bool is_left_sibling, InternalPage *parent, int index);
+  void Coalesce(N *node, N *sibling, bool is_left_sibling, InternalPage *parent, int index, Transaction *txn);
 
   template <typename N>
   void Redistribute(N *node, N *sibling, bool is_left_sibling, InternalPage *parent, int index);
@@ -108,6 +111,10 @@ class BPlusTree {
 
   auto FindLeftOrRightMostLeaf(bool leftmost) -> Page*;
 
+  void ReleaseAllLatchesFromQueue(Transaction *txn);
+
+  void ReleaseOneLatchFromQueue(Transaction *txn);
+
   // member variable
   std::string index_name_;
   page_id_t root_page_id_;
@@ -116,6 +123,9 @@ class BPlusTree {
 
   int leaf_max_size_;
   int internal_max_size_;
+
+
+  ReaderWriterLatch root_latch_;
 };
 
 }  // namespace bustub
