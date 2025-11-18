@@ -25,7 +25,6 @@ void TopNExecutor::Init() {
     pq_.pop();
   }
 
-
 }
 
 auto TopNExecutor::Next(Tuple *tuple, RID *rid) -> bool {

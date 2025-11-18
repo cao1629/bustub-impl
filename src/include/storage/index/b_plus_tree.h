@@ -108,7 +108,6 @@ class BPlusTree {
 
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
 
-
   auto FindLeftOrRightMostLeaf(bool leftmost) -> Page*;
 
   void ReleaseAllLatchesFromQueue(Transaction *txn);

@@ -229,7 +229,6 @@ auto BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) -> bool {
   replacer_->Remove(frame_id);
 
   return true;
-
 }
 
 auto BufferPoolManagerInstance::AllocatePage() -> page_id_t { return next_page_id_++; }

@@ -190,6 +190,7 @@ class AggregationExecutor : public AbstractExecutor {
                       std::unique_ptr<AbstractExecutor> &&child);
 
   /** Initialize the aggregation */
+  // Read all records from the child executor and construct the aggregate hash table.
   void Init() override;
 
   /**
@@ -198,6 +199,8 @@ class AggregationExecutor : public AbstractExecutor {
    * @param[out] rid The next tuple RID produced by the aggregation
    * @return `true` if a tuple was produced, `false` if there are no more tuples
    */
+  // Now we already have the aggregate hash table.
+  // Use iterator to go through it.
   auto Next(Tuple *tuple, RID *rid) -> bool override;
 
   /** @return The output schema for the aggregation */

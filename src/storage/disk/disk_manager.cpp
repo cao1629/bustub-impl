@@ -77,6 +77,7 @@ void DiskManager::ShutDown() {
 /**
  * Write the contents of the specified page into disk file
  */
+// data starts from "page_data", and we know how many bytes we're going to write. (page size)
 void DiskManager::WritePage(page_id_t page_id, const char *page_data) {
   std::scoped_lock scoped_db_io_latch(db_io_latch_);
   size_t offset = static_cast<size_t>(page_id) * BUSTUB_PAGE_SIZE;
@@ -117,6 +118,7 @@ void DiskManager::ReadPage(page_id_t page_id, char *page_data) {
       LOG_DEBUG("Read less than a page");
       db_io_.clear();
       // std::cerr << "Read less than a page" << std::endl;
+      // padding the remaining space
       memset(page_data + read_count, 0, BUSTUB_PAGE_SIZE - read_count);
     }
   }

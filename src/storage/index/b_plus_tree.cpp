@@ -534,7 +534,6 @@ INDEX_TEMPLATE_ARGUMENTS
 template <typename N>
 void BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling, InternalPage *parent, int index,
                               Transaction *txn) {
-  std::cout << "xxx" << std::endl;
   if (node->IsLeafPage()) {
     auto leaf_node = reinterpret_cast<LeafPage *>(node);
     auto sibling_leaf_node = reinterpret_cast<LeafPage *>(sibling);
@@ -559,7 +558,6 @@ void BPLUSTREE_TYPE::Coalesce(N *node, N *sibling, bool is_left_sibling, Interna
       parent->RemoveAt(index + 1);
     }
   }
-
 
   if (parent->GetSize() < parent->GetMinSize()) {
     ReleaseOneLatchFromQueue(txn);

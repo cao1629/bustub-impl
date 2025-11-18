@@ -30,7 +30,7 @@ void InsertExecutor::Init() {
   auto *txn = exec_ctx_->GetTransaction();
 
   try {
-    bool is_locked = lock_mgr->LockTable(txn, LockManager::LockMode::INTENTION_EXCLUSIVE, table_info_->oid_);
+    bool is_locked = lock_mgr->LockTable(txn, LockManager::LockMode::EXCLUSIVE, table_info_->oid_);
     if (!is_locked) {
       throw ExecutionException("Insert Executor Get Table Lock Failed");
     }
@@ -40,8 +40,8 @@ void InsertExecutor::Init() {
 }
 
 auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
-  auto *lock_mgr = exec_ctx_->GetLockManager();
-  auto *txn = exec_ctx_->GetTransaction();
+  // auto *lock_mgr = exec_ctx_->GetLockManager();
+  // auto *txn = exec_ctx_->GetTransaction();
 
   if (done_) {
     return false;
@@ -63,16 +63,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     // Assume the current transaction is interrupted here, and another transaction
     // tries to read the just inserted tuple. In this case, the other transaction
     // read an uncommited write.
-    if (table_info_->table_->InsertTuple(to_insert_tuple, rid, exec_ctx_->GetTransaction())) {
-      try {
-        bool is_locked = lock_mgr->LockRow(txn, LockManager::LockMode::EXCLUSIVE, table_info_->oid_, *rid);
-        if (!is_locked) {
-          throw ExecutionException("Insert Executor Get Row Lock Failed");
-        }
-      } catch (TransactionAbortException &ex) {
-        throw ExecutionException("Insert Executor Get Row Lock Failed");
-      }
-    }
+    table_info_->table_->InsertTuple(to_insert_tuple, rid, exec_ctx_->GetTransaction());
 
     // Insert the tuple into all indexes associated with the table.
     // Page latches are used to protecting indexes.

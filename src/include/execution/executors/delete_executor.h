@@ -39,6 +39,7 @@ class DeleteExecutor : public AbstractExecutor {
                  std::unique_ptr<AbstractExecutor> &&child_executor);
 
   /** Initialize the delete */
+  // IX
   void Init() override;
 
   /**

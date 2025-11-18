@@ -133,7 +133,7 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
       if (txn->GetState() == TransactionState::ABORTED) {
         // transaction is aborted in the meantime
         table_lock_request_queue->request_queue_.remove(table_lock_request);
-        table_lock_request_queue->cv_.notify_all();
+        // table_lock_request_queue->cv_.notify_all();
         return false;
       }
     }
@@ -186,7 +186,7 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
       // transaction is aborted in the meantime
       table_lock_request_queue->upgrading_ = INVALID_TXN_ID;
       table_lock_request_queue->request_queue_.remove(upgrade_table_lock_request);
-      table_lock_request_queue->cv_.notify_all();
+      // table_lock_request_queue->cv_.notify_all();
       return false;
     }
   }
@@ -313,7 +313,7 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
         if (txn->GetState() == TransactionState::ABORTED) {
           // transaction is aborted in the meantime
           row_lock_request_queue->request_queue_.remove(row_lock_request);
-          row_lock_request_queue->cv_.notify_all();
+          // row_lock_request_queue->cv_.notify_all();
           return false;
         }
     }
@@ -367,7 +367,7 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
       // transaction is aborted in the meantime
       row_lock_request_queue->upgrading_ = INVALID_TXN_ID;
       row_lock_request_queue->request_queue_.remove(upgrade_request);
-      row_lock_request_queue->cv_.notify_all();
+      // row_lock_request_queue->cv_.notify_all();
       return false;
     }
   }
